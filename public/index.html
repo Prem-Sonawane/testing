@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Curious AI — Career Intelligence</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- ══════════ ONBOARDING ══════════ -->
+<div id="onboarding" class="onboarding">
+
+  <!-- ── LEFT PANEL ── -->
+  <div class="ob-left">
+
+    <!-- Theme toggle button (top right) -->
+    <button class="ob-theme-toggle" id="themeToggleOnboarding">
+      <span class="th-dark">☾</span>
+      <span class="th-light">☀</span>
+    </button>
+
+    <!-- Animated grid lines drawn by CSS -->
+    <div class="ob-grid"></div>
+    <!-- Glowing corner accent -->
+    <div class="ob-corner-glow"></div>
+
+    <!-- Hero brand block — big, centred, dominant -->
+    <div class="ob-hero">
+      <div class="ob-logo-wrap">
+        <div class="ob-logo-ring"></div>
+        <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="Curious AI" class="ob-logo"/>
+        <div class="ob-logo-pulse"></div>
+      </div>
+      <div class="ob-wordblock">
+        <div class="ob-name">CURIOUS<span>AI</span></div>
+        <div class="ob-tagline-line"><span class="ob-tl-bar"></span><span class="ob-tagline">Career Intelligence Platform</span><span class="ob-tl-bar"></span></div>
+      </div>
+    </div>
+
+    <!-- Headline -->
+    <div class="ob-pitch">
+      <h1><em>Success</em> finds<br/>curious minds</h1>
+    </div>
+
+  </div><!-- /ob-left -->
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="ob-right">
+    <div class="ob-card">
+      <div class="ob-card-top">
+        <span class="ob-card-badge">NEW SESSION</span>
+        <div class="ob-live-dot"></div>
+      </div>
+      <h2>Enter your details</h2>
+
+      <div class="ob-fields">
+        <!-- Row 1: Name (full width) -->
+        <div class="ob-field ob-field--full">
+          <label>FULL NAME <span class="req">*</span></label>
+          <input type="text" id="nameInput" placeholder="e.g. Arjun Mehta" autocomplete="name"/>
+        </div>
+        <!-- Row 2: Age + Phone side by side -->
+        <div class="ob-field-row">
+          <div class="ob-field">
+            <label>AGE <span class="req">*</span></label>
+            <input type="number" id="ageInput" placeholder="e.g. 15" min="10" max="20"/>
+          </div>
+          <div class="ob-field">
+            <label>PHONE <span class="req">*</span></label>
+            <input type="tel" id="phoneInput" placeholder="e.g. 9876543210" maxlength="10"/>
+          </div>
+        </div>
+        <!-- Row 3: Email (full width) + City (full width) -->
+        <div class="ob-field ob-field--full">
+          <label>EMAIL ID <span class="req">*</span></label>
+          <input type="email" id="emailInput" placeholder="e.g. arjun@gmail.com" autocomplete="email"/>
+        </div>
+        <div class="ob-field ob-field--full">
+          <label>CITY / SCHOOL <span class="req">*</span></label>
+          <input type="text" id="cityInput" placeholder="e.g. Mumbai" autocomplete="off"/>
+        </div>
+      </div>
+
+      <button id="btnBegin" class="ob-btn">
+        <span>Initialise Session</span>
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <p class="ob-err" id="obErr"></p>
+
+      <div class="ob-admin-divider"><span>or</span></div>
+      <button id="btnAdminLogin" class="ob-admin-btn">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15"><rect x="3" y="11" width="14" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 11V7a3 3 0 116 0v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Admin Login</span>
+      </button>
+    </div>
+  </div><!-- /ob-right -->
+
+</div><!-- /onboarding -->
+
+<!-- ══════════ MAIN APP ══════════ -->
+<div id="app" class="app hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-top">
+      <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="" class="sb-logo"/>
+      <span class="sb-name">CURIOUS<em>AI</em></span>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-step active" id="nav-conversation">
+        <div class="sbt"><div class="sbd"></div><div class="sbl"></div></div>
+        <div class="sbi"><span class="sbn">01</span><span class="sbs-label">Conversation</span><span class="sbs-status" id="status-conversation">In Progress</span></div>
+      </div>
+      <div class="sb-step locked" id="nav-aptitude">
+        <div class="sbt"><div class="sbd"></div><div class="sbl"></div></div>
+        <div class="sbi"><span class="sbn">02</span><span class="sbs-label">Aptitude</span><span class="sbs-status" id="status-aptitude">Locked</span></div>
+      </div>
+      <div class="sb-step locked" id="nav-professions">
+        <div class="sbt"><div class="sbd"></div><div class="sbl"></div></div>
+        <div class="sbi"><span class="sbn">03</span><span class="sbs-label">Career Map</span><span class="sbs-status" id="status-professions">Locked</span></div>
+      </div>
+      <div class="sb-step locked" id="nav-report">
+        <div class="sbt"><div class="sbd"></div></div>
+        <div class="sbi"><span class="sbn">04</span><span class="sbs-label">Report</span><span class="sbs-status" id="status-report">Locked</span></div>
+      </div>
+    </nav>
+    <div class="sb-foot">
+      <div class="sb-student" id="sbStudent"></div>
+      <button class="sb-theme" id="themeToggle">
+        <span class="th-dark">☾</span>
+        <span class="th-light">☀</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- CANVAS -->
+  <main class="canvas" id="canvas">
+
+    <!-- ── SECTION 01: CONVERSATION ── -->
+    <section id="sec-conversation" class="section">
+      <div class="sec-head">
+        <div class="sec-badge">MODULE 01</div>
+        <h2 class="sec-title">Career Conversation</h2>
+        <p class="sec-desc">The AI will ask you questions to understand exactly what you want to do. Answer honestly — there are no right or wrong answers.</p>
+      </div>
+      <div class="chat-box" id="chatBox">
+
+        <!-- ── MODE TOGGLE BAR ── -->
+        <div class="conv-mode-bar" id="convModeBar">
+          <div class="conv-mode-label">Conversation Mode</div>
+          <div class="conv-mode-toggle" id="convModeToggle" title="Switch conversation mode">
+            <button class="cmt-btn cmt-btn--chat" id="cmtChat" data-mode="chat">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 10c0 3.866-3.582 7-8 7a8.6 8.6 0 01-2.83-.48L2 18l1.35-3.13A6.77 6.77 0 012 10C2 6.134 5.582 3 10 3s8 3.134 8 7z"/></svg>
+              <span>Chat</span>
+            </button>
+            <button class="cmt-btn cmt-btn--hybrid active" id="cmtHybrid" data-mode="hybrid">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="9" y="2" width="4" height="8" rx="2"/><path d="M3 9a7 7 0 0014 0"/><line x1="10" y1="16" x2="10" y2="19"/></svg>
+              <span>Hybrid</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-feed" id="chatFeed"></div>
+        <div class="chat-typing hidden" id="chatTyping">
+          <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="Curious AI" class="ct-av">
+          <span class="ct-dots"><b></b><b></b><b></b></span>
+        </div>
+
+        <!-- ╔══════════════════════════════════════════╗
+             ║  HYBRID MODE — Mic zone (default)       ║
+             ╚══════════════════════════════════════════╝ -->
+        <div class="cmi-zone" id="chatMicZone">
+
+          <!-- keyboard toggle — top-right corner (Hybrid only) -->
+          <button class="cmi-mode-btn" id="switchToKeyboard" title="Switch to keyboard input">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+              <rect x="2" y="6" width="20" height="13" rx="2"/>
+              <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M10 14h4M18 14h.01"/>
+            </svg>
+            <span>Keyboard</span>
+          </button>
+
+          <!-- ambient glow layer -->
+          <div class="cmi-glow"></div>
+
+          <!-- status text -->
+          <p class="cmi-status" id="micStatus">Tap mic to answer</p>
+
+          <!-- BIG mic button -->
+          <button class="cmi-btn" id="micBtn" aria-label="Record answer">
+            <!-- three pulsing rings, only visible while listening -->
+            <span class="cmi-ring cmi-ring--a"></span>
+            <span class="cmi-ring cmi-ring--b"></span>
+            <span class="cmi-ring cmi-ring--c"></span>
+            <!-- inner circle -->
+            <span class="cmi-core">
+              <!-- mic icon -->
+              <svg class="cmi-ico cmi-ico--mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="2" width="6" height="11" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="8"  y1="22" x2="16" y2="22"/>
+              </svg>
+              <!-- stop icon (shown while listening) -->
+              <svg class="cmi-ico cmi-ico--stop" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+              </svg>
+            </span>
+          </button>
+
+          <!-- live transcript preview (italic, fades in) -->
+          <p class="cmi-preview" id="micPreview"></p>
+
+        </div><!-- /cmi-zone -->
+
+        <!-- ╔══════════════════════════════════════════╗
+             ║  HYBRID KEYBOARD — text bar with mic    ║
+             ║  toggle (used inside Hybrid mode only)  ║
+             ╚══════════════════════════════════════════╝ -->
+        <div class="chat-compose hidden" id="hybridCompose">
+          <textarea id="hybridTA" class="chat-ta" placeholder="Type your response…" rows="1"></textarea>
+          <div class="compose-btns">
+            <!-- switch back to mic within Hybrid -->
+            <button class="cmi-mode-btn cmi-mode-btn--kb" id="switchToMic" title="Switch to mic input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                <rect x="9" y="2" width="6" height="11" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="8"  y1="22" x2="16" y2="22"/>
+              </svg>
+              <span>Mic</span>
+            </button>
+            <button class="btn-send" id="hybridSendBtn">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                <line x1="10" y1="16" x2="10" y2="4"/>
+                <polyline points="5 9 10 4 15 9"/>
+              </svg>
+            </button>
+          </div>
+        </div><!-- /hybridCompose -->
+
+        <!-- ╔══════════════════════════════════════════╗
+             ║  CHAT MODE — Pure text compose bar      ║
+             ║  No mic, no TTS — WhatsApp style        ║
+             ╚══════════════════════════════════════════╝ -->
+        <div class="chat-compose hidden" id="chatCompose">
+          <textarea id="chatTA" class="chat-ta" placeholder="Type your response…" rows="1"></textarea>
+          <div class="compose-btns">
+            <button class="btn-send" id="sendBtn">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                <line x1="10" y1="16" x2="10" y2="4"/>
+                <polyline points="5 9 10 4 15 9"/>
+              </svg>
+            </button>
+          </div>
+        </div><!-- /chatCompose -->
+
+      </div><!-- /chat-box -->
+      <div class="done-banner hidden" id="convDoneBanner">
+        <div class="db-left"><div class="db-check">✓</div><div><p class="db-title">Conversation Complete</p><p class="db-sub">Aptitude test begins below ↓</p></div></div>
+      </div>
+    </section>
+
+    <!-- ── SECTION 02: APTITUDE ── -->
+    <section id="sec-aptitude" class="section hidden-section">
+      <div class="sec-divider">MODULE 02 — APTITUDE ASSESSMENT</div>
+      <div class="sec-head">
+        <div class="sec-badge">MODULE 02</div>
+        <h2 class="sec-title">Aptitude Assessment</h2>
+        <p class="sec-desc">15 questions across 5 domains. 25-minute time limit. Choose the best answer for each.</p>
+      </div>
+      <div class="apt-bar">
+        <div class="apt-timer-wrap">
+          <div class="apt-ring"><svg viewBox="0 0 52 52"><circle class="ring-bg" cx="26" cy="26" r="22"/><circle class="ring-fg" id="timerRingFill" cx="26" cy="26" r="22"/></svg></div>
+          <div class="apt-timer-info"><span class="ati-l">TIME LEFT</span><span class="ati-v" id="timerValue">25:00</span></div>
+        </div>
+        <div class="apt-prog-info"><span class="api-l">PROGRESS</span><span class="api-v" id="aptProgressValue">0 / 10</span></div>
+      </div>
+      <div class="apt-dots" id="aptDotsRow"></div>
+      <div class="q-card" id="questionBlock">
+        <div class="q-top"><span class="q-cat" id="qbCat">—</span><span class="q-num" id="qbNum">01 / 15</span></div>
+        <p class="q-text" id="qbText">Loading…</p>
+        <div class="q-opts" id="qbOptions"></div>
+      </div>
+      <div class="apt-nav">
+        <button class="btn-prev" id="aptPrev" disabled>← Prev</button>
+        <button class="btn-next" id="aptNext">Next →</button>
+      </div>
+      <div class="done-banner hidden" id="aptDoneBanner">
+        <div class="db-left"><div class="db-check">✓</div><div><p class="db-title">Assessment Complete</p><p class="db-sub">Career preference mapping begins below ↓</p></div></div>
+      </div>
+    </section>
+
+    <!-- ── SECTION 03: PROFESSIONS ── -->
+    <section id="sec-professions" class="section hidden-section">
+      <div class="sec-divider">MODULE 03 — CAREER MAPPING</div>
+      <div class="sec-head">
+        <div class="sec-badge">MODULE 03</div>
+        <h2 class="sec-title">Career Preference Map</h2>
+        <p class="sec-desc">Click to select your top 5 careers. Click again to remove. Rank them in order of preference.</p>
+      </div>
+      <div class="prof-layout">
+        <div class="prof-grid" id="profGrid"></div>
+        <div class="prof-panel" id="profRank">
+          <div class="pp-head"><span>YOUR RANKING</span><span class="pp-count"><span id="rankCount">0</span>/5</span></div>
+          <ol class="pp-list" id="prList">
+            <li class="pp-slot" data-r="1"><span class="pps-n">#1</span><span class="pps-l">Not selected</span></li>
+            <li class="pp-slot" data-r="2"><span class="pps-n">#2</span><span class="pps-l">Not selected</span></li>
+            <li class="pp-slot" data-r="3"><span class="pps-n">#3</span><span class="pps-l">Not selected</span></li>
+            <li class="pp-slot" data-r="4"><span class="pps-n">#4</span><span class="pps-l">Not selected</span></li>
+            <li class="pp-slot" data-r="5"><span class="pps-n">#5</span><span class="pps-l">Not selected</span></li>
+          </ol>
+          <button class="btn-submit" id="btnGenerate" disabled>SUBMIT &amp; GENERATE REPORT →</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="canvas-end"></div>
+  </main>
+</div>
+
+<!-- ══════════ DASHBOARD PAGE ══════════ -->
+<div id="dashboard" class="dashboard hidden">
+  <div class="dash-sidebar">
+    <div class="ds-brand">
+      <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="" class="sb-logo"/>
+      <span class="sb-name">CURIOUS<em>AI</em></span>
+    </div>
+    <div class="ds-student" id="dsStudentName"></div>
+    <nav class="ds-nav">
+      <a class="dsn-link active" href="#dash-hero">Stream Result</a>
+      <a class="dsn-link" href="#dash-profile">Interest Profile</a>
+      <a class="dsn-link" href="#dash-aptitude">Aptitude Scores</a>
+      <a class="dsn-link" href="#dash-charts">Analytics</a>
+      <a class="dsn-link" href="#dash-careers">Career Choices</a>
+      <a class="dsn-link" href="#dash-guidance">Full Guidance</a>
+    </nav>
+    <div class="ds-foot">
+      <button class="btn-pdf" id="btnPDF">⬇ Download PDF</button>
+      <button class="btn-restart" id="btnRestart">↺ New Session</button>
+    </div>
+  </div>
+
+  <div class="dash-main" id="dashMain">
+
+    <!-- LOADING STATE -->
+    <div class="dash-loading" id="dashLoading">
+      <div class="dl-spinner"></div>
+      <p class="dl-title">Generating your report</p>
+      <p class="dl-sub">Combining conversation insights, aptitude data, and career preferences…</p>
+    </div>
+
+    <!-- REPORT CONTENT -->
+    <div class="dash-content hidden" id="dashContent">
+
+      <!-- HERO BLOCK -->
+      <div class="dash-hero" id="dash-hero">
+        <div class="dh-eyebrow">RECOMMENDED STREAM</div>
+        <div class="dh-stream" id="dhStream">—</div>
+        <div class="dh-combo" id="dhCombo">—</div>
+        <div class="dh-tags" id="dhTags"></div>
+        <div class="dh-divider"></div>
+        <div class="dh-meta">
+          <div class="dhm"><span class="dhm-l">STUDENT</span><span class="dhm-v" id="dhStudent">—</span></div>
+          <div class="dhm"><span class="dhm-l">SESSION</span><span class="dhm-v" id="dhDate">—</span></div>
+          <div class="dhm"><span class="dhm-l">PLATFORM</span><span class="dhm-v">Curious AI v3</span></div>
+        </div>
+      </div>
+
+      <!-- INTEREST PROFILE (hidden, kept for data binding) -->
+      <div class="dash-block hidden" id="dash-profile">
+        <div class="db-label">INTEREST PROFILE</div>
+        <p class="db-text" id="dbInterest"></p>
+      </div>
+
+      <!-- THREE CARDS ROW: Aptitude Test + Stream Alignment + Cognitive Profile -->
+      <span id="dash-charts" style="display:block;height:0;visibility:hidden;"></span>
+      <div class="dash-trio-row" id="dash-aptitude">
+        <!-- Card 1: Aptitude Test -->
+        <div class="dash-trio-panel">
+          <div class="dash-trio-header">
+            <span class="dash-trio-label">Aptitude Test</span>
+          </div>
+          <div class="dash-trio-body">
+            <div class="trio-apt-grid" id="aptScoreGrid"></div>
+          </div>
+        </div>
+        <!-- Card 2: Stream Alignment -->
+        <div class="dash-trio-panel">
+          <div class="dash-trio-header">
+            <span class="dash-trio-label">Stream Alignment</span>
+          </div>
+          <div class="dash-trio-body">
+            <div class="cp-wrap" style="height:220px"><canvas id="chartStream"></canvas></div>
+          </div>
+        </div>
+        <!-- Card 3: Cognitive Profile -->
+        <div class="dash-trio-panel">
+          <div class="dash-trio-header">
+            <span class="dash-trio-label">Cognitive Profile</span>
+          </div>
+          <div class="dash-trio-body">
+            <div class="cp-wrap" style="height:220px"><canvas id="chartRadar"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAREER CHOICES -->
+      <div class="dash-block" id="dash-careers">
+        <div class="db-label">YOUR RANKED CAREERS</div>
+        <div class="career-grid" id="careerGrid"></div>
+      </div>
+
+      <!-- GUIDANCE -->
+      <div class="dash-block dash-block--wide" id="dash-guidance">
+        <div class="db-label">CAREER GUIDANCE</div>
+        <div class="guidance-text" id="guidanceText"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ OTP VERIFICATION SCREEN ══════════ -->
+<div id="otpScreen" class="onboarding hidden" style="position:fixed;inset:0;z-index:9000;">
+  <div class="ob-left">
+    <button class="ob-theme-toggle" id="themeToggleOTP">
+      <span class="th-dark">☾</span>
+      <span class="th-light">☀</span>
+    </button>
+    <div class="ob-grid"></div>
+    <div class="ob-corner-glow"></div>
+    <div class="ob-hero">
+      <div class="ob-logo-wrap">
+        <div class="ob-logo-ring"></div>
+        <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="Curious AI" class="ob-logo"/>
+        <div class="ob-logo-pulse"></div>
+      </div>
+      <div class="ob-wordblock">
+        <div class="ob-name">CURIOUS<span>AI</span></div>
+        <div class="ob-tagline-line"><span class="ob-tl-bar"></span><span class="ob-tagline">Career Intelligence Platform</span><span class="ob-tl-bar"></span></div>
+      </div>
+    </div>
+    <div class="ob-pitch">
+      <h1><em>Verify</em> your<br/>identity</h1>
+    </div>
+  </div>
+  <div class="ob-right">
+    <div class="ob-card">
+      <div class="ob-card-top">
+        <span class="ob-card-badge">OTP VERIFICATION</span>
+        <div class="ob-live-dot"></div>
+      </div>
+      <h2>Enter OTP</h2>
+      <p class="otp-sent-msg" id="otpSentMsg">We sent a 6-digit OTP to your number</p>
+      <div class="ob-fields">
+        <div class="ob-field ob-field--full">
+          <label>6-DIGIT OTP <span class="req">*</span></label>
+          <input type="number" id="otpInput" placeholder="e.g. 123456" maxlength="6" style="font-size:1.5rem;letter-spacing:0.2em;text-align:center;font-family:var(--mono);"/>
+        </div>
+      </div>
+      <button id="btnVerifyOTP" class="ob-btn">
+        <span>Verify OTP</span>
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <p class="ob-err" id="otpErr"></p>
+      <div class="otp-footer-row">
+        <button id="btnResendOTP" class="otp-resend-btn" disabled>
+          Resend OTP <span id="resendTimer">(30s)</span>
+        </button>
+        <button id="btnBackToForm" class="ob-admin-btn" style="margin-top:0;">
+          ← Back
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ WAITING SCREEN ══════════ -->
+<div id="waitingScreen" class="onboarding hidden" style="position:fixed;inset:0;z-index:8000;">
+  <div class="ob-left">
+    <div class="ob-grid"></div>
+    <div class="ob-corner-glow"></div>
+    <div class="ob-hero">
+      <div class="ob-logo-wrap">
+        <div class="ob-logo-ring"></div>
+        <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="Curious AI" class="ob-logo"/>
+        <div class="ob-logo-pulse"></div>
+      </div>
+      <div class="ob-wordblock">
+        <div class="ob-name">CURIOUS<span>AI</span></div>
+        <div class="ob-tagline-line"><span class="ob-tl-bar"></span><span class="ob-tagline">Career Intelligence Platform</span><span class="ob-tl-bar"></span></div>
+      </div>
+    </div>
+    <div class="ob-pitch">
+      <h1><em>Almost</em> there.<br/>Hold on.</h1>
+    </div>
+  </div>
+  <div class="ob-right">
+    <div class="ob-card">
+      <div class="ob-card-top">
+        <span class="ob-card-badge">PENDING APPROVAL</span>
+        <div class="ob-live-dot"></div>
+      </div>
+      <h2>Request Sent</h2>
+
+      <!-- Premium animated waiting indicator -->
+      <div class="wait-indicator">
+        <div class="wait-orb">
+          <div class="wait-ring wait-ring--1"></div>
+          <div class="wait-ring wait-ring--2"></div>
+          <div class="wait-ring wait-ring--3"></div>
+          <div class="wait-core">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <p class="wait-heading">Reviewing your session request</p>
+      <p class="wait-subtext">Please wait while the admin reviews your request. This usually takes a few minutes.</p>
+
+      <!-- Student details -->
+      <div class="wait-details" id="waitDetails"></div>
+
+      <!-- Live status -->
+      <div class="wait-status-bar">
+        <div class="wait-status-dot"></div>
+        <span class="wait-status-label" id="waitStatusLabel">Pending review…</span>
+      </div>
+
+      <!-- Rejection message (hidden by default) -->
+      <div class="wait-rejected hidden" id="waitRejected">
+        <p class="wait-reject-msg">Your session request was not approved. Please contact your counsellor.</p>
+        <button id="btnTryAgain" class="ob-btn" style="margin-top:1rem;">
+          <span>Try Again</span>
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ADMIN LOGIN MODAL ══════════ -->
+<div id="adminModal" class="adm-modal-overlay hidden">
+  <div class="adm-modal">
+    <div class="adm-modal-top">
+      <div class="adm-modal-badge">ADMIN ACCESS</div>
+      <button class="adm-modal-close" id="btnAdminClose">✕</button>
+    </div>
+    <h3 class="adm-modal-title">Admin Login</h3>
+    <p class="adm-modal-sub">Enter your credentials to access the admin dashboard.</p>
+    <div class="adm-fields">
+      <div class="ob-field ob-field--full">
+        <label>EMAIL <span class="req">*</span></label>
+        <input type="email" id="adminUser" placeholder="e.g. admin@curiousai.in" autocomplete="off"/>
+      </div>
+      <div class="ob-field ob-field--full">
+        <label>PASSWORD <span class="req">*</span></label>
+        <input type="password" id="adminPass" placeholder="Enter password"/>
+      </div>
+    </div>
+    <button class="ob-btn" id="btnAdminSubmit">
+      <span>Access Dashboard</span>
+      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <p class="ob-err" id="adminErr"></p>
+  </div>
+</div>
+
+<!-- ══════════ ADMIN DASHBOARD ══════════ -->
+<div id="adminDashboard" class="adm-dashboard hidden">
+  <div class="adm-header">
+    <div class="adm-header-left">
+      <img src="https://i.postimg.cc/pdx6CC83/Gemini-Generated-Image-rooaqqrooaqqrooa-removebg-preview.png" alt="" class="sb-logo" style="width:36px;height:36px"/>
+      <div>
+        <div class="adm-title">Admin Dashboard</div>
+        <div class="adm-subtitle">Career Guidance Sessions — Curious AI</div>
+      </div>
+    </div>
+    <div class="adm-header-right">
+      <div class="adm-stat-group">
+        <div class="adm-stat"><span class="adm-stat-v" id="admTotalCount">0</span><span class="adm-stat-l">Total Students</span></div>
+        <div class="adm-stat-sep"></div>
+        <div class="adm-stat"><span class="adm-stat-v" id="admCompleteCount">0</span><span class="adm-stat-l">Reports Ready</span></div>
+        <div class="adm-stat-sep"></div>
+        <div class="adm-stat"><span class="adm-stat-v" id="admSciCount">0</span><span class="adm-stat-l">Science</span></div>
+        <div class="adm-stat-sep"></div>
+        <div class="adm-stat"><span class="adm-stat-v" id="admApprovedCount">0</span><span class="adm-stat-l">Approved</span></div>
+        <div class="adm-stat-sep"></div>
+        <div class="adm-stat"><span class="adm-stat-v" id="admRejectedCount">0</span><span class="adm-stat-l">Rejected</span></div>
+      </div>
+      <button class="adm-logout btn-admin-refresh" id="btnAdminRefresh">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="13" height="13"><path d="M4 4v5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10A6 6 0 104.93 6.07L4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Refresh
+      </button>
+      <button class="adm-logout" id="btnAdminLogout">↩ Logout</button>
+    </div>
+  </div>
+  <div class="adm-body">
+    <!-- ══ PENDING REQUESTS SECTION ══ -->
+    <div class="adm-pending-section" id="admPendingSection">
+      <div class="adm-pending-header">
+        <div class="adm-pending-title">
+          <span class="adm-pending-icon">⏳</span>
+          Pending Session Requests
+          <span class="adm-pending-badge" id="pendingBadge">0</span>
+        </div>
+        <p class="adm-pending-sub">New requests appear here in real time. Approve or reject each student.</p>
+      </div>
+      <div id="pendingRequestsGrid" class="adm-pending-grid">
+        <div class="adm-pending-empty" id="pendingEmpty">
+          <span style="font-size:2rem;">✅</span>
+          <p>No pending requests right now</p>
+        </div>
+      </div>
+    </div>
+    <!-- ══ HISTORY SECTION ══ -->
+    <div class="adm-history-section" id="admHistorySection">
+      <div class="adm-history-heading">Session Request History</div>
+      <div class="adm-history-tabs">
+        <button class="adm-history-tab active" id="admTabApproved">Approved</button>
+        <button class="adm-history-tab" id="admTabRejected">Rejected</button>
+      </div>
+      <div id="admHistoryGrid" class="adm-pending-grid">
+        <div class="adm-history-empty" id="historyEmpty">No records yet</div>
+      </div>
+    </div>
+    <!-- ══ DIVIDER ══ -->
+    <div class="adm-section-divider">
+      <span>Completed Sessions</span>
+    </div>
+    <div class="adm-search-bar">
+      <div class="adm-search-wrap">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.7"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input type="text" id="admSearch" placeholder="Search by name, city, email…" class="adm-search-input"/>
+      </div>
+      <div class="adm-filter-pills">
+        <button class="adm-pill active" data-filter="all">All</button>
+        <button class="adm-pill" data-filter="complete">Report Ready</button>
+        <button class="adm-pill" data-filter="science">Science</button>
+        <button class="adm-pill" data-filter="commerce">Commerce</button>
+        <button class="adm-pill" data-filter="arts">Arts</button>
+      </div>
+    </div>
+    <div class="adm-empty hidden" id="admEmpty">
+      <div class="adm-empty-icon">🗂</div>
+      <div class="adm-empty-title">No student sessions yet</div>
+      <div class="adm-empty-sub">Student records will appear here once sessions are completed.</div>
+    </div>
+    <div class="adm-grid" id="admGrid"></div>
+  </div>
+</div>
+
+<div id="adminToast" class="adm-toast hidden">Dashboard refreshed ✓</div>
+
+<!-- ══════════ FIREBASE (CDN — no npm) ══════════ -->
+<!-- Firebase App (core) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<!-- Firebase Auth (Phone OTP + Email/Password) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<!-- Firebase Firestore (session requests + completed sessions) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<!-- reCAPTCHA container — required by Firebase Phone Auth (invisible) -->
+<div id="recaptcha-container" style="display:none;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
