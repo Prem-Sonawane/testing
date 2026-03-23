@@ -4,7 +4,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { contents, generationConfig, model = "gemini-1.5-pro", purpose } = req.body;
+  const { contents, generationConfig, model = "gemini-2.5-flash", purpose } = req.body;
 
   // Choose API key based on purpose (optional)
   let apiKey;
