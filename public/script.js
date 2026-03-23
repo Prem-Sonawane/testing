@@ -2,6 +2,8 @@
  * CURIOUS AI v5 — Google Cloud STT + TTS + Gemini 2.0 Flash
  * Firebase Integration: Phone OTP Auth + Firestore Session Management
  * Modified to use serverless API endpoints for API keys security.
+ * FIXED: Career cards and stream recommendation now truly personalised.
+ * ADDED: Auto‑Approve toggle in admin dashboard.
  */
 "use strict";
 
@@ -43,9 +45,9 @@ const S = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   Gemini – now calls our own serverless function
+   Gemini – now calls our own serverless function with model & purpose
 ═══════════════════════════════════════════════════════════ */
-async function gemini(messages, maxTokens = 600, temp = 0.78) {
+async function gemini(messages, maxTokens = 600, temp = 0.78, model = "gemini-1.5-pro", purpose = "general") {
   const contents = [];
   let systemText = "";
 
@@ -80,6 +82,8 @@ async function gemini(messages, maxTokens = 600, temp = 0.78) {
   const body = JSON.stringify({
     contents,
     generationConfig: { temperature: temp, maxOutputTokens: maxTokens },
+    model,
+    purpose,
   });
 
   const MAX_RETRIES = 4;
@@ -88,7 +92,7 @@ async function gemini(messages, maxTokens = 600, temp = 0.78) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const waitMs = (Math.pow(2, attempt - 1) * 1000) + (Math.random() * 1000);
-      console.warn(`⏳ Gemini rate limit — retry ${attempt}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
+      console.warn(`⏳ Gemini retry ${attempt}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
       await new Promise(r => setTimeout(r, waitMs));
     }
 
@@ -114,8 +118,9 @@ async function gemini(messages, maxTokens = 600, temp = 0.78) {
       return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
 
     } catch(err) {
-      if (err.message && err.message.includes("Rate limit")) {
-        lastError = err; continue;
+      if (err.message && (err.message.includes("Rate limit") || err.message.includes("429"))) {
+        lastError = err;
+        continue;
       }
       throw err;
     }
@@ -137,13 +142,10 @@ function ensureMaxThreeSentences(text, isFinalTurn = false) {
     doneSuffix = text.substring(doneIndex);
   }
 
-  // Split on . ! ? followed by space or end-of-string
   const sentences = mainText.match(/[^.!?]+[.!?](\s|$)/g);
   let trimmed = sentences ? sentences.slice(0, 3).join(" ").trim() : mainText;
 
-  // If not final turn and the last character is not a question mark, append a generic question
   if (!isFinalTurn && !trimmed.endsWith("?")) {
-    // Remove any trailing punctuation that might be a period
     trimmed = trimmed.replace(/[.!]+$/, '').trim();
     trimmed += " What do you think?";
   }
@@ -654,6 +656,9 @@ async function verifyOTP() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   FIREBASE — PART 3: CREATE SESSION REQUEST with AUTO-APPROVE
+═══════════════════════════════════════════════════════════ */
 async function createSessionRequest(uid) {
   try {
     await fbDb.collection("sessionRequests").doc(uid).set({
@@ -668,8 +673,23 @@ async function createSessionRequest(uid) {
       rejectionReason: "",
     });
 
-    showWaitingScreen(uid);
-
+    // Check auto-approve setting
+    const settingsDoc = await fbDb.collection("settings").doc("global").get();
+    const autoApprove = settingsDoc.exists && settingsDoc.data().autoApprove === true;
+    if (autoApprove) {
+      await fbDb.collection("sessionRequests").doc(uid).update({ status: "approved" });
+      console.log("✅ Auto-approved session for", S.name);
+      // Start the app directly
+      document.getElementById("app").classList.remove("hidden");
+      document.getElementById("sbStudent").textContent = S.name;
+      markActive("conversation");
+      setSidebarStep("aptitude","locked");
+      setSidebarStep("professions","locked");
+      setSidebarStep("report","locked");
+      startConversation();
+    } else {
+      showWaitingScreen(uid);
+    }
   } catch(err) {
     console.error("Firestore write error:", err);
     alert("Could not submit your session request. Please check your internet connection and try again.");
@@ -1003,25 +1023,33 @@ function startTimer(){
   S.timerInterval=setInterval(tick,1000);
 }
 
-/* ═══ PROFESSIONS — AI generated ════════════════════════ */
-async function initProfessions(){
-  S.ranked=[];
-  const grid=document.getElementById("profGrid");
+/* ═══ PROFESSIONS — AI generated (NO FALLBACK) ═════════════ */
+async function initProfessions() {
+  S.ranked = [];
+  const grid = document.getElementById("profGrid");
   resetSlots();
-  document.getElementById("rankCount").textContent="0";
-  document.getElementById("btnGenerate").disabled=true;
+  document.getElementById("rankCount").textContent = "0";
+  document.getElementById("btnGenerate").disabled = true;
 
-  grid.innerHTML="";
-  for(let i=0;i<10;i++){
-    const sk=document.createElement("div");
-    sk.className="prof-card prof-skeleton";
-    sk.innerHTML=`<div class="sk-emoji"></div><div class="sk-title"></div><div class="sk-desc"></div>`;
+  // Show loading skeletons
+  grid.innerHTML = "";
+  for (let i = 0; i < 10; i++) {
+    const sk = document.createElement("div");
+    sk.className = "prof-card prof-skeleton";
+    sk.innerHTML = `<div class="sk-emoji"></div><div class="sk-title"></div><div class="sk-desc"></div>`;
     grid.appendChild(sk);
   }
 
   try {
-    const convStr = S.history.filter(m=>m.role==="user").map(m=>m.content).slice(0,12).join(" | ");
-    const aptStr  = Object.entries(S.scores).map(([k,v])=>`${CAT_LABEL[k]}: ${v}%`).join(", ");
+    // Shorten conversation: last 5 user messages, each trimmed to 100 chars
+    const convStr = S.history
+      .filter(m => m.role === "user")
+      .map(m => m.content.substring(0, 100))
+      .slice(-5)
+      .join(" | ");
+    const aptStr = Object.entries(S.scores)
+      .map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`)
+      .join(", ");
 
     const prompt = `You are a career counsellor for Indian Class 10 students.
 
@@ -1054,108 +1082,121 @@ Return ONLY valid JSON array, no markdown, no code fences:
 ]`;
 
     const raw = await gemini(
-      [{role:"system",content:"Output ONLY a valid JSON array. Nothing else. No markdown."},{role:"user",content:prompt}],
-      900, 0.7
+      [{ role: "system", content: "Output ONLY a valid JSON array. Nothing else. No markdown." }, { role: "user", content: prompt }],
+      900, 0.7,
+      "gemini-1.5-pro",
+      "careers"
     );
 
     let pool;
-    try {
-      const m = raw.match(/\[[\s\S]*\]/);
-      pool = JSON.parse(m ? m[0] : raw);
-      if (!Array.isArray(pool) || pool.length < 5) throw new Error("bad response");
-      pool = pool.slice(0,10);
-    } catch {
-      pool = [
-        {e:"🤖",t:"AI / ML Engineer",     d:"Build intelligent systems that learn and adapt",   s:"PCM"},
-        {e:"🔐",t:"Cybersecurity Analyst", d:"Protect systems and networks from cyber attacks",  s:"PCM"},
-        {e:"🚀",t:"Aerospace Engineer",    d:"Design aircraft, rockets, and space systems",      s:"PCM"},
-        {e:"🧬",t:"Biomedical Engineer",   d:"Build medical devices that save lives",            s:"PCM/PCB"},
-        {e:"📊",t:"Data Scientist",        d:"Extract insights from massive datasets",           s:"PCM"},
-        {e:"🧠",t:"Neuroscientist",        d:"Research how the brain works and heals",           s:"PCB"},
-        {e:"💻",t:"Software Engineer",     d:"Build apps and systems used by millions",          s:"PCM"},
-        {e:"🩺",t:"Doctor",                d:"Diagnose and treat patients every day",            s:"PCB"},
-        {e:"⚙️",t:"Mechanical Engineer",  d:"Design machines and mechanical systems",           s:"PCM"},
-        {e:"🎨",t:"UI/UX Designer",        d:"Design interfaces people love to use",             s:"Arts"},
-      ];
-    }
-
+    const m = raw.match(/\[[\s\S]*\]/);
+    pool = JSON.parse(m ? m[0] : raw);
+    if (!Array.isArray(pool) || pool.length < 5) throw new Error("Bad response from Gemini");
+    pool = pool.slice(0, 10);
     S.pool = pool;
 
-    grid.innerHTML="";
-    pool.forEach((p,i)=>{
-      const card=document.createElement("div"); card.className="prof-card";
-      card.dataset.i=i; card.style.animationDelay=`${i*0.05}s`;
-      card.innerHTML=`
+    grid.innerHTML = "";
+    pool.forEach((p, i) => {
+      const card = document.createElement("div");
+      card.className = "prof-card";
+      card.dataset.i = i;
+      card.style.animationDelay = `${i * 0.05}s`;
+      card.innerHTML = `
         <span class="pc-emoji">${p.e}</span>
         <div class="pc-title">${p.t}</div>
         <div class="pc-desc">${p.d}</div>
         <div class="pc-stream">${p.s}</div>`;
-      card.addEventListener("click",()=>toggleProf(i,card));
+      card.addEventListener("click", () => toggleProf(i, card));
       grid.appendChild(card);
     });
-
-  } catch(err) {
-    grid.innerHTML=`<div style="grid-column:span 3;color:var(--red);font-family:var(--mono);font-size:.8rem;padding:20px;">Failed to generate careers: ${err.message}</div>`;
+  } catch (err) {
+    console.error("Career generation failed:", err);
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--red); padding: 2rem;">
+      ⚠️ Could not generate personalised careers: ${err.message}<br>
+      Please try again later or contact support.
+    </div>`;
+    document.getElementById("btnGenerate").disabled = true;
+    return;
   }
 
-  document.getElementById("btnGenerate").onclick=()=>{
-    markDone("professions"); markActive("report");
+  document.getElementById("btnGenerate").onclick = () => {
+    markDone("professions");
+    markActive("report");
     showDashboard();
   };
 }
 
-function toggleProf(i,card){
-  if(card.classList.contains("selected")){
-    card.classList.remove("selected"); card.querySelector(".pc-rank-badge")?.remove();
-    S.ranked=S.ranked.filter(x=>x!==i); rebuildSlots();
+function toggleProf(i, card) {
+  if (card.classList.contains("selected")) {
+    card.classList.remove("selected");
+    card.querySelector(".pc-rank-badge")?.remove();
+    S.ranked = S.ranked.filter(x => x !== i);
+    rebuildSlots();
   } else {
-    if(S.ranked.length>=5)return;
-    S.ranked.push(i); card.classList.add("selected");
-    const badge=document.createElement("span"); badge.className="pc-rank-badge"; badge.textContent=S.ranked.length; card.appendChild(badge);
-    fillSlot(S.ranked.length,i);
+    if (S.ranked.length >= 5) return;
+    S.ranked.push(i);
+    card.classList.add("selected");
+    const badge = document.createElement("span");
+    badge.className = "pc-rank-badge";
+    badge.textContent = S.ranked.length;
+    card.appendChild(badge);
+    fillSlot(S.ranked.length, i);
   }
-  document.getElementById("rankCount").textContent=S.ranked.length;
-  document.getElementById("btnGenerate").disabled=S.ranked.length<5;
+  document.getElementById("rankCount").textContent = S.ranked.length;
+  document.getElementById("btnGenerate").disabled = S.ranked.length < 5;
 }
 
-function fillSlot(rank,idx){
-  const p=S.pool[idx];
-  const slot=document.querySelector(`.pp-slot[data-r="${rank}"]`);
-  slot.className="pp-slot filled";
-  slot.innerHTML=`<span class="pps-n">#${rank}</span><span class="pps-e">${p.e}</span><span class="pps-l">${p.t}</span>`;
-  slot.onclick=()=>{const card=document.querySelector(`.prof-card[data-i="${idx}"]`);if(card)toggleProf(idx,card);};
+function fillSlot(rank, idx) {
+  const p = S.pool[idx];
+  const slot = document.querySelector(`.pp-slot[data-r="${rank}"]`);
+  slot.className = "pp-slot filled";
+  slot.innerHTML = `<span class="pps-n">#${rank}</span><span class="pps-e">${p.e}</span><span class="pps-l">${p.t}</span>`;
+  slot.onclick = () => {
+    const card = document.querySelector(`.prof-card[data-i="${idx}"]`);
+    if (card) toggleProf(idx, card);
+  };
 }
-function resetSlots(){
-  for(let r=1;r<=5;r++){
-    const s=document.querySelector(`.pp-slot[data-r="${r}"]`);
-    s.className="pp-slot"; s.innerHTML=`<span class="pps-n">#${r}</span><span class="pps-l">Not selected</span>`; s.onclick=null;
+function resetSlots() {
+  for (let r = 1; r <= 5; r++) {
+    const s = document.querySelector(`.pp-slot[data-r="${r}"]`);
+    s.className = "pp-slot";
+    s.innerHTML = `<span class="pps-n">#${r}</span><span class="pps-l">Not selected</span>`;
+    s.onclick = null;
   }
 }
-function rebuildSlots(){
+function rebuildSlots() {
   resetSlots();
-  document.querySelectorAll(".prof-card").forEach(c=>c.querySelector(".pc-rank-badge")?.remove());
-  S.ranked.forEach((idx,i)=>{
-    fillSlot(i+1,idx);
-    const card=document.querySelector(`.prof-card[data-i="${idx}"]`);
-    if(card){const b=document.createElement("span");b.className="pc-rank-badge";b.textContent=i+1;card.appendChild(b);}
+  document.querySelectorAll(".prof-card").forEach(c => c.querySelector(".pc-rank-badge")?.remove());
+  S.ranked.forEach((idx, i) => {
+    fillSlot(i + 1, idx);
+    const card = document.querySelector(`.prof-card[data-i="${idx}"]`);
+    if (card) {
+      const b = document.createElement("span");
+      b.className = "pc-rank-badge";
+      b.textContent = i + 1;
+      card.appendChild(b);
+    }
   });
-  document.getElementById("rankCount").textContent=S.ranked.length;
-  document.getElementById("btnGenerate").disabled=S.ranked.length<5;
+  document.getElementById("rankCount").textContent = S.ranked.length;
+  document.getElementById("btnGenerate").disabled = S.ranked.length < 5;
 }
 
 /* ═══ DASHBOARD ══════════════════════════════════════════ */
 function showDashboard() {
-  document.getElementById("app").style.opacity="0";
-  document.getElementById("app").style.transition="opacity 0.4s";
-  setTimeout(()=>{
-    document.getElementById("app").style.display="none";
-    const dash=document.getElementById("dashboard");
+  document.getElementById("app").style.opacity = "0";
+  document.getElementById("app").style.transition = "opacity 0.4s";
+  setTimeout(() => {
+    document.getElementById("app").style.display = "none";
+    const dash = document.getElementById("dashboard");
     dash.classList.remove("hidden");
-    dash.style.opacity="0"; dash.style.transition="opacity 0.4s";
-    requestAnimationFrame(()=>{dash.style.opacity="1";});
-    document.getElementById("dsStudentName").textContent=S.name+(S.city?` · ${S.city}`:"");
+    dash.style.opacity = "0";
+    dash.style.transition = "opacity 0.4s";
+    requestAnimationFrame(() => {
+      dash.style.opacity = "1";
+    });
+    document.getElementById("dsStudentName").textContent = S.name + (S.city ? ` · ${S.city}` : "");
     generateReport();
-  },400);
+  }, 400);
 }
 
 async function saveSessionToAdmin(reportData) {
@@ -1175,22 +1216,26 @@ async function saveSessionToAdmin(reportData) {
       completedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     console.log("✅ Session saved to Firestore completedSessions/");
-  } catch(err) {
+  } catch (err) {
     console.warn("Firestore save failed (non-critical):", err);
   }
 }
 
-async function generateReport(){
-  document.getElementById("dashLoading").style.display="flex";
+async function generateReport() {
+  document.getElementById("dashLoading").style.display = "flex";
   document.getElementById("dashContent").classList.add("hidden");
 
-  const careers=S.ranked.map((idx,r)=>`#${r+1}: ${S.pool[idx].t}`).join(", ");
-  const aptStr=Object.entries(S.scores).map(([k,v])=>`${CAT_LABEL[k]}: ${v}%`).join(", ");
-  const convStr=S.history.filter(m=>m.role==="user").map(m=>m.content).slice(0,10).join(" | ");
+  const careers = S.ranked.map((idx, r) => `#${r + 1}: ${S.pool[idx].t}`).join(", ");
+  const aptStr = Object.entries(S.scores).map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`).join(", ");
+  const convStr = S.history
+    .filter(m => m.role === "user")
+    .map(m => m.content.substring(0, 100))
+    .slice(-5)
+    .join(" | ");
 
-  const prompt=`Generate a career analysis JSON for a Class 10 Indian student.
+  const prompt = `Generate a career analysis JSON for a Class 10 Indian student.
 
-Student: ${S.name}${S.city?", "+S.city:""}
+Student: ${S.name}${S.city ? ", " + S.city : ""}
 Conversation (student's own words): "${convStr}"
 Aptitude scores: ${aptStr}
 Career choices (ranked): ${careers}
@@ -1206,82 +1251,88 @@ Return ONLY valid JSON, no markdown, no code fences:
 }`;
 
   try {
-    const raw=await gemini([{role:"system",content:"Output ONLY valid JSON. Nothing else."},{role:"user",content:prompt}],2400,0.42);
+    const raw = await gemini(
+      [{ role: "system", content: "Output ONLY valid JSON. Nothing else." }, { role: "user", content: prompt }],
+      2400, 0.42,
+      "gemini-1.5-pro",
+      "report"
+    );
     let data;
-    try { const m=raw.match(/\{[\s\S]*\}/); data=JSON.parse(m?m[0]:raw); } catch { data=fallback(); }
-    S.reportData=data;
+    const m = raw.match(/\{[\s\S]*\}/);
+    data = JSON.parse(m ? m[0] : raw);
+    S.reportData = data;
     await saveSessionToAdmin(data);
     renderDashboard(data);
-  } catch(err) {
-    document.getElementById("dashLoading").innerHTML=`<p style="color:var(--red);font-size:1rem;text-align:center;font-family:var(--mono)">Report generation failed:<br>${err.message}</p>`;
+  } catch (err) {
+    console.error("Report generation failed:", err);
+    document.getElementById("dashLoading").innerHTML = `<p style="color:var(--red);font-size:1rem;text-align:center;font-family:var(--mono)">
+      Report generation failed: ${err.message}<br>Please try again later.
+    </p>`;
+    // No fallback
+    return;
   }
 }
 
-function fallback(){
-  return {
-    streamRecommendation:"Science",
-    subjectCombo:"PCM — Physics, Chemistry, Mathematics",
-    interestProfile:`${S.name} demonstrates strong analytical curiosity and a desire to build things that matter. Their conversation reveals goal-oriented thinking with a preference for structured problem-solving. They show genuine interest in understanding systems — both technical and human. This profile aligns closely with engineering and applied science pathways.`,
-    strengthsIdentified:["Analytical Thinking","Problem Solving","Curiosity","Goal-Oriented","Persistence"],
-    streamScores:{science:74,commerce:52,arts:36},
-    detailedGuidance:`Based on everything you shared, Science with PCM — Physics, Chemistry, and Mathematics — is the strongest fit for your goals and thinking style.\n\nPCM is the most versatile combination after Class 10. It keeps every door open: engineering, architecture, data science, finance, and even medicine through lateral paths.\n\nYour aptitude profile shows clear strength in logical and numerical reasoning — exactly what PCM demands and rewards at every stage from Class 11 through JEE.\n\nTarget JEE Main and Advanced, BITSAT, and MHT-CET. Start Mathematics seriously from Day 1 of Class 11. It is the bottleneck subject across all competitive exams.\n\nOne practical step: pick up a JEE Foundation book for Class 11 Physics this week. Start before school starts. The students who do this have a measurable advantage.\n\nYou have clearly thought about your future. That seriousness is itself an asset. Trust the direction — and do the work.`,
-  };
-}
-
-function renderDashboard(data){
-  document.getElementById("dashLoading").style.display="none";
-  const content=document.getElementById("dashContent");
+function renderDashboard(data) {
+  document.getElementById("dashLoading").style.display = "none";
+  const content = document.getElementById("dashContent");
   content.classList.remove("hidden");
 
-  const stream=(data.streamRecommendation||"Science").trim();
+  const stream = (data.streamRecommendation || "Science").trim();
   const isScience = stream.toLowerCase().includes("science");
   const isArtsOrCommerce = !isScience;
 
-  document.getElementById("dhStream").textContent=stream;
-  document.getElementById("dhCombo").textContent=data.subjectCombo||"—";
-  document.getElementById("dhStudent").textContent=S.name+(S.city?` · ${S.city}`:"");
-  document.getElementById("dhDate").textContent=new Date().toLocaleDateString("en-IN",{year:"numeric",month:"long",day:"numeric"});
+  document.getElementById("dhStream").textContent = stream;
+  document.getElementById("dhCombo").textContent = data.subjectCombo || "—";
+  document.getElementById("dhStudent").textContent = S.name + (S.city ? ` · ${S.city}` : "");
+  document.getElementById("dhDate").textContent = new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" });
 
-  const tagsEl=document.getElementById("dhTags");
-  tagsEl.innerHTML=(data.strengthsIdentified||[]).map(s=>`<span class="dh-tag">${s}</span>`).join("");
+  const tagsEl = document.getElementById("dhTags");
+  tagsEl.innerHTML = (data.strengthsIdentified || []).map(s => `<span class="dh-tag">${s}</span>`).join("");
 
-  document.getElementById("dbInterest").textContent=data.interestProfile||"";
+  document.getElementById("dbInterest").textContent = data.interestProfile || "";
 
-  const grid=document.getElementById("aptScoreGrid"); grid.innerHTML="";
-  const scores=[
+  const grid = document.getElementById("aptScoreGrid");
+  grid.innerHTML = "";
+  const scores = [
     ["Numerical",  S.scores.numerical,  "🔢"],
     ["Logical",    S.scores.logical,    "🧩"],
     ["Verbal",     S.scores.verbal,     "📖"],
     ["Abstract",   S.scores.abstract,   "🔷"],
     ["Data Intel", S.scores.dataInt,    "📊"],
   ];
-  const total=Math.round(scores.reduce((a,[,v])=>a+v,0)/scores.length);
-  const overallEl=document.createElement("div"); overallEl.className="trio-overall";
-  overallEl.innerHTML=`<span class="trio-overall-score">${total}%</span><span class="trio-overall-label">Overall · ${total>=70?"Strong":"Developing"}</span>`;
+  const total = Math.round(scores.reduce((a, [, v]) => a + v, 0) / scores.length);
+  const overallEl = document.createElement("div");
+  overallEl.className = "trio-overall";
+  overallEl.innerHTML = `<span class="trio-overall-score">${total}%</span><span class="trio-overall-label">Overall · ${total >= 70 ? "Strong" : "Developing"}</span>`;
   grid.appendChild(overallEl);
-  scores.forEach(([label,val,icon])=>{
-    const color = val>=70?"var(--gold)":val>=50?"#f5a623":"var(--red,#ef4444)";
-    const row=document.createElement("div"); row.className="trio-apt-item";
-    row.innerHTML=`
+  scores.forEach(([label, val, icon]) => {
+    const color = val >= 70 ? "var(--gold)" : val >= 50 ? "#f5a623" : "var(--red,#ef4444)";
+    const row = document.createElement("div");
+    row.className = "trio-apt-item";
+    row.innerHTML = `
       <span class="trio-apt-name">${icon} ${label}</span>
       <div class="trio-apt-track"><div class="trio-apt-fill" style="width:${val}%;background:${color}"></div></div>
       <span class="trio-apt-pct">${val}%</span>`;
     grid.appendChild(row);
   });
 
-  const cg=document.getElementById("careerGrid"); cg.innerHTML="";
-  S.ranked.forEach((idx,r)=>{
-    const p=S.pool[idx];
-    const item=document.createElement("div"); item.className="cg-item"; item.style.animationDelay=`${r*0.07}s`;
-    item.innerHTML=`<div class="cg-rank">#${r+1}</div><span class="cg-emoji">${p.e}</span><div class="cg-name">${p.t}</div><div class="cg-sub">${p.d}</div>`;
+  const cg = document.getElementById("careerGrid");
+  cg.innerHTML = "";
+  S.ranked.forEach((idx, r) => {
+    const p = S.pool[idx];
+    const item = document.createElement("div");
+    item.className = "cg-item";
+    item.style.animationDelay = `${r * 0.07}s`;
+    item.innerHTML = `<div class="cg-rank">#${r + 1}</div><span class="cg-emoji">${p.e}</span><div class="cg-name">${p.t}</div><div class="cg-sub">${p.d}</div>`;
     cg.appendChild(item);
   });
 
-  const gEl=document.getElementById("guidanceText");
-  let paras=(data.detailedGuidance||"").split(/\n\n+/).filter(p=>p.trim()).map(p=>`<p>${p.trim()}</p>`);
+  const gEl = document.getElementById("guidanceText");
+  let paras = (data.detailedGuidance || "").split(/\n\n+/).filter(p => p.trim()).map(p => `<p>${p.trim()}</p>`);
 
-  if(isArtsOrCommerce){
-    const scienceNote=`<p class="guidance-note guidance-note--info">
+  if (isArtsOrCommerce) {
+    const scienceNote = `<p class="guidance-note guidance-note--info">
       One thing worth knowing before you fully commit: Science in Class 11 keeps every door open —
       it gives you access to engineering, medicine, design, data science, <em>and</em> everything in
       Commerce and Arts as well. The reverse is not true. If you later discover a passion for
@@ -1289,11 +1340,11 @@ function renderDashboard(data){
       This is not a reason to change your path if you are genuinely clear — but if there is
       even a small pull toward STEM, Science is the safer, wider choice at this stage.
     </p>`;
-    paras.splice(1,0,scienceNote);
+    paras.splice(1, 0, scienceNote);
   }
 
-  if(isScience){
-    const cmNote=`<div class="guidance-cm-block">
+  if (isScience) {
+    const cmNote = `<div class="guidance-cm-block">
       <div class="cm-label">YOUR NEXT STEP</div>
       <p>
         One thing that makes the Science path smoother than most students realise:
@@ -1313,74 +1364,89 @@ function renderDashboard(data){
       </p>
       <div class="cm-tagline">Study + Skills · Under One Roof · Curious Minds Coaching</div>
     </div>`;
-    const insertAt=Math.min(3,paras.length);
-    paras.splice(insertAt,0,cmNote);
+    const insertAt = Math.min(3, paras.length);
+    paras.splice(insertAt, 0, cmNote);
   }
 
-  gEl.innerHTML=paras.join("");
+  gEl.innerHTML = paras.join("");
 
-  setTimeout(()=>{renderStreamChart(data.streamScores);renderRadarChart();},300);
-  setTimeout(()=>document.getElementById("dash-hero").scrollIntoView({behavior:"smooth"}),100);
+  setTimeout(() => {
+    renderStreamChart(data.streamScores);
+    renderRadarChart();
+  }, 300);
+  setTimeout(() => document.getElementById("dash-hero").scrollIntoView({ behavior: "smooth" }), 100);
 }
 
 /* ═══ CHARTS ══════════════════════════════════════════════ */
-function chartTheme(){
+function chartTheme() {
   return {
-    border: S.theme==="dark"?"rgba(255,255,255,.07)":"rgba(0,0,0,.07)",
-    text:   S.theme==="dark"?"#8888a4":"#555568",
-    surf:   S.theme==="dark"?"#13131a":"#ffffff",
+    border: S.theme === "dark" ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)",
+    text:   S.theme === "dark" ? "#8888a4" : "#555568",
+    surf:   S.theme === "dark" ? "#13131a" : "#ffffff",
   };
 }
-function renderStreamChart(scores){
-  const ctx=document.getElementById("chartStream"); if(!ctx)return;
-  if(S.charts.stream)S.charts.stream.destroy();
-  const cd=chartTheme(); const s=scores||{science:60,commerce:50,arts:40};
-  S.charts.stream=new Chart(ctx,{
-    type:"doughnut",
-    data:{
-      labels:["Science","Commerce","Arts"],
-      datasets:[{
-        data:[s.science,s.commerce,s.arts],
-        backgroundColor:["rgba(237,245,0,.92)","rgba(250,250,247,.5)","rgba(57,255,20,.65)"],
-        borderColor:cd.surf, borderWidth:4, hoverOffset:6,
+function renderStreamChart(scores) {
+  const ctx = document.getElementById("chartStream");
+  if (!ctx) return;
+  if (S.charts.stream) S.charts.stream.destroy();
+  const cd = chartTheme();
+  const s = scores || { science: 60, commerce: 50, arts: 40 };
+  S.charts.stream = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: ["Science", "Commerce", "Arts"],
+      datasets: [{
+        data: [s.science, s.commerce, s.arts],
+        backgroundColor: ["rgba(237,245,0,.92)", "rgba(250,250,247,.5)", "rgba(57,255,20,.65)"],
+        borderColor: cd.surf,
+        borderWidth: 4,
+        hoverOffset: 6,
       }],
     },
-    options:{
-      responsive:true, maintainAspectRatio:false, cutout:"72%",
-      plugins:{
-        legend:{position:"bottom",labels:{color:cd.text,font:{family:"'Space Mono'",size:10},padding:14,usePointStyle:true}},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "72%",
+      plugins: {
+        legend: { position: "bottom", labels: { color: cd.text, font: { family: "'Space Mono'", size: 10 }, padding: 14, usePointStyle: true } },
       },
     },
   });
 }
-function renderRadarChart(){
-  const ctx=document.getElementById("chartRadar"); if(!ctx)return;
-  if(S.charts.radar)S.charts.radar.destroy();
-  const cd=chartTheme();
-  S.charts.radar=new Chart(ctx,{
-    type:"radar",
-    data:{
-      labels:["Numerical","Logical","Verbal","Abstract","Data Int."],
-      datasets:[{
-        label:S.name,
-        data:[S.scores.numerical,S.scores.logical,S.scores.verbal,S.scores.abstract,S.scores.dataInt],
-        fill:true,
-        backgroundColor:"rgba(237,245,0,.1)",
-        borderColor:"rgba(237,245,0,.9)",
-        pointBackgroundColor:"rgba(237,245,0,1)",
-        pointBorderColor:cd.surf, pointHoverRadius:5,
+function renderRadarChart() {
+  const ctx = document.getElementById("chartRadar");
+  if (!ctx) return;
+  if (S.charts.radar) S.charts.radar.destroy();
+  const cd = chartTheme();
+  S.charts.radar = new Chart(ctx, {
+    type: "radar",
+    data: {
+      labels: ["Numerical", "Logical", "Verbal", "Abstract", "Data Int."],
+      datasets: [{
+        label: S.name,
+        data: [S.scores.numerical, S.scores.logical, S.scores.verbal, S.scores.abstract, S.scores.dataInt],
+        fill: true,
+        backgroundColor: "rgba(237,245,0,.1)",
+        borderColor: "rgba(237,245,0,.9)",
+        pointBackgroundColor: "rgba(237,245,0,1)",
+        pointBorderColor: cd.surf,
+        pointHoverRadius: 5,
       }],
     },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:cd.text,font:{family:"'Space Mono'",size:10}}}},
-      scales:{r:{
-        min:0,max:100,
-        ticks:{stepSize:25,color:cd.text,backdropColor:"transparent",font:{family:"'Space Mono'",size:9}},
-        grid:{color:cd.border},
-        pointLabels:{color:cd.text,font:{family:"'Space Grotesk'",size:11}},
-        angleLines:{color:cd.border},
-      }},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: cd.text, font: { family: "'Space Mono'", size: 10 } } } },
+      scales: {
+        r: {
+          min: 0,
+          max: 100,
+          ticks: { stepSize: 25, color: cd.text, backdropColor: "transparent", font: { family: "'Space Mono'", size: 9 } },
+          grid: { color: cd.border },
+          pointLabels: { color: cd.text, font: { family: "'Space Grotesk'", size: 11 } },
+          angleLines: { color: cd.border },
+        },
+      },
     },
   });
 }
@@ -1893,6 +1959,27 @@ async function downloadPDF() {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
 }
 
+/* ═══ AUTO‑APPROVE FUNCTIONS ═══════════════════════════════ */
+async function loadAutoApproveSetting() {
+  try {
+    const doc = await fbDb.collection("settings").doc("global").get();
+    if (doc.exists && doc.data().autoApprove !== undefined) {
+      const toggle = document.getElementById("autoApproveToggle");
+      if (toggle) toggle.checked = doc.data().autoApprove;
+    }
+  } catch (err) {
+    console.warn("Failed to load auto-approve setting:", err);
+  }
+}
+
+async function saveAutoApproveSetting(value) {
+  try {
+    await fbDb.collection("settings").doc("global").set({ autoApprove: value }, { merge: true });
+  } catch (err) {
+    console.error("Failed to save auto-approve setting:", err);
+  }
+}
+
 /* ═══ INIT ════════════════════════════════════════════════ */
 document.addEventListener("DOMContentLoaded",()=>{
   initTheme();
@@ -2132,10 +2219,8 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ═══════════════════════════════════════════════════════════
-   FIREBASE — PART 5: ADMIN LOGIN (Firebase Email/Password Auth)
-   PART 4: PENDING REQUESTS + COMPLETED SESSIONS from Firestore
+   FIREBASE — ADMIN LOGIN & DASHBOARD (UPDATED with auto‑approve)
 ═══════════════════════════════════════════════════════════ */
-
 let fbPendingUnsubscribe = null;
 let fbApprovedUnsubscribe = null;
 let fbRejectedUnsubscribe = null;
@@ -2180,6 +2265,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("onboarding").style.display = "none";
       admDash.classList.remove("hidden");
       renderAdminDashboard();
+      // Load auto‑approve setting and attach listener
+      loadAutoApproveSetting();
+      const toggle = document.getElementById("autoApproveToggle");
+      if (toggle) {
+        toggle.addEventListener("change", async (e) => {
+          await saveAutoApproveSetting(e.target.checked);
+        });
+      }
     } catch(err) {
       console.error("Admin login error:", err);
       adminErr.textContent = "Invalid credentials. Please try again.";

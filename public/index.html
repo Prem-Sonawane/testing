@@ -595,6 +595,14 @@
         <div class="adm-stat-sep"></div>
         <div class="adm-stat"><span class="adm-stat-v" id="admRejectedCount">0</span><span class="adm-stat-l">Rejected</span></div>
       </div>
+      <!-- AUTO APPROVE TOGGLE -->
+      <div class="auto-approve-toggle" style="display:flex; align-items:center; gap:8px; margin:0 16px;">
+        <span style="font-family:var(--mono); font-size:.7rem; color:var(--txt2);">Auto Approve</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoApproveToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <button class="adm-logout btn-admin-refresh" id="btnAdminRefresh">
         <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="13" height="13"><path d="M4 4v5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10A6 6 0 104.93 6.07L4 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Refresh
