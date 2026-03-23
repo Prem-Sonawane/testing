@@ -47,7 +47,7 @@ const S = {
 /* ═══════════════════════════════════════════════════════════
    Gemini – now calls our own serverless function with model & purpose
 ═══════════════════════════════════════════════════════════ */
-async function gemini(messages, maxTokens = 600, temp = 0.78, model = "gemini-1.5-pro", purpose = "general") {
+async function gemini(messages, maxTokens = 600, temp = 0.78, model = "gemini-1.5-flash", purpose = "general") {
   const contents = [];
   let systemText = "";
 
@@ -1084,7 +1084,7 @@ Return ONLY valid JSON array, no markdown, no code fences:
     const raw = await gemini(
       [{ role: "system", content: "Output ONLY a valid JSON array. Nothing else. No markdown." }, { role: "user", content: prompt }],
       900, 0.7,
-      "gemini-1.5-pro",
+      "gemini-1.5-flash",
       "careers"
     );
 
@@ -1254,7 +1254,7 @@ Return ONLY valid JSON, no markdown, no code fences:
     const raw = await gemini(
       [{ role: "system", content: "Output ONLY valid JSON. Nothing else." }, { role: "user", content: prompt }],
       2400, 0.42,
-      "gemini-1.5-pro",
+      "gemini-1.5-flash",
       "report"
     );
     let data;
