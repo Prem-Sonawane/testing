@@ -144,6 +144,13 @@ function ensureMaxThreeSentences(text, isFinalTurn = false) {
     doneSuffix = text.substring(doneIndex);
   }
 
+  // Strip numbered list items (e.g. "1. ", "2) ") and replace trailing colons with a period
+  // so the sentence regex can parse Gemini responses that use list formatting
+  mainText = mainText
+    .replace(/^\d+[.)]\s+/gm, '')
+    .replace(/:\s*(\n|$)/gm, '. ')
+    .trim();
+
   const sentences = mainText.match(/[^.!?]+[.!?](\s|$)/g);
   let trimmed = sentences ? sentences.slice(0, 3).join(" ").trim() : mainText;
 
@@ -764,6 +771,8 @@ MANDATORY RULES — EVERY RESPONSE MUST:
 - Use plain English, as if spoken aloud (for Text-to-Speech).
 - Never repeat or summarise what the student just said.
 - Never use markdown, asterisks, or bullet points.
+- Never use numbered lists. Never write "1.", "2.", "3." or any number followed by a period or bracket inside your response prose.
+- Never use a colon to introduce a list. If you want to mention multiple things, join them naturally with "and" or "but" in a single flowing sentence.
 - Never include [DONE] before turn 12.
 - **Stay within a 250‑token budget. This is a hard limit – if you exceed it, your response will be cut off mid‑sentence. Keep it concise.**
 
@@ -791,11 +800,14 @@ BAD RESPONSES (will be rejected):
 - "Okay, thanks for sharing. What about..." (filler, too short)
 - "Which subject do you enjoy most?" (only one sentence, too short)
 - Any response that repeats a topic already discussed (e.g., asking a second question about the same hobby).
+- "This tells me several things about you: 1. You enjoy data 2. You think analytically" (numbered list — strictly forbidden)
+- "This tells me several things about you:" (colon introducing a list — strictly forbidden, merge into a flowing sentence instead)
 
 STRICT ENFORCEMENT:
 - Count your sentences. More than 3 = failure.
 - No question mark at end (turns 1–11) = failure.
 - Incomplete sentence = failure.
+- Numbered list or colon-introduced list = failure.
 - Turn 12 must not contain a question mark – it must be a closing statement only.`;
 
 function startConversation() {
