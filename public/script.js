@@ -1248,20 +1248,26 @@ async function generateReport() {
 
   const careers = S.ranked.map((idx, r) => `#${r + 1}: ${S.pool[idx].t}`).join(", ");
   const aptStr = Object.entries(S.scores).map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`).join(", ");
+  
+  // Clean conversation text: remove double quotes, backslashes, newlines, and non-ASCII
+  const clean = (str) => str
+    .replace(/["\\\n\r\t]/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .substring(0, 100);
   const convStr = S.history
     .filter(m => m.role === "user")
-    .map(m => m.content.substring(0, 100))
-    .slice(-5)
+    .map(m => clean(m.content))
+    .slice(-3)
     .join(" | ");
 
-  const prompt = `Generate a career analysis JSON for a Class 10 Indian student.
+  const prompt = `Generate a career analysis JSON for an Indian Class 10 student. Return ONLY valid JSON. No extra text.
 
 Student: ${S.name}${S.city ? ", " + S.city : ""}
-Conversation (student's own words): "${convStr}"
+Conversation: "${convStr}"
 Aptitude scores: ${aptStr}
 Career choices (ranked): ${careers}
 
-Return ONLY valid JSON, no markdown, no code fences:
+Output must be a JSON object with exactly these keys:
 {
   "streamRecommendation": "Science" or "Commerce" or "Arts",
   "subjectCombo": "e.g. PCM — Physics, Chemistry, Mathematics",
@@ -1269,18 +1275,49 @@ Return ONLY valid JSON, no markdown, no code fences:
   "strengthsIdentified": ["strength1","strength2","strength3","strength4","strength5"],
   "streamScores": { "science": 0-100, "commerce": 0-100, "arts": 0-100 },
   "detailedGuidance": "6 paragraphs separated by \\n\\n. Cover: why this stream fits them (reference conversation), what to focus on in Std 11-12, 3 specific career paths with context, entrance exams to target, one practical step right now, a direct personal closing. Be honest, specific, and motivating."
-}`;
+}
+
+Do not include any other text or markdown. Escape double quotes inside strings.`;
 
   try {
     const raw = await gemini(
-      [{ role: "system", content: "Output ONLY valid JSON. Nothing else." }, { role: "user", content: prompt }],
-      2400, 0.42,
+      [{ role: "system", content: "You are a JSON generator. Output only valid JSON objects. Never include any other text or markdown." }, { role: "user", content: prompt }],
+      4000, // increased token limit
+      0.42,
       "gemini-2.5-flash",
       "report"
     );
+    console.log("Raw report response:", raw);
+
+    // Extract JSON object from response (in case Gemini adds anything)
+    let jsonStr = raw;
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) jsonStr = match[0];
+
+    // Repair common JSON issues: unescape quotes inside string values
+    function repairJSON(str) {
+      // This regex replaces unescaped double quotes inside string values with escaped ones.
+      // It works by matching "key": "value" and escaping quotes inside the value.
+      return str.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, content) => {
+        const escapedContent = content.replace(/"/g, '\\"');
+        return `"${escapedContent}"`;
+      });
+    }
+
     let data;
-    const m = raw.match(/\{[\s\S]*\}/);
-    data = JSON.parse(m ? m[0] : raw);
+    try {
+      data = JSON.parse(jsonStr);
+    } catch (firstError) {
+      console.warn("First parse failed, attempting repair...");
+      const repaired = repairJSON(jsonStr);
+      try {
+        data = JSON.parse(repaired);
+      } catch (secondError) {
+        console.error("Repair also failed. Raw substring:", jsonStr.substring(0, 500));
+        throw new Error(`Invalid JSON from Gemini: ${firstError.message}`);
+      }
+    }
+
     S.reportData = data;
     await saveSessionToAdmin(data);
     renderDashboard(data);
@@ -1289,7 +1326,7 @@ Return ONLY valid JSON, no markdown, no code fences:
     document.getElementById("dashLoading").innerHTML = `<p style="color:var(--red);font-size:1rem;text-align:center;font-family:var(--mono)">
       Report generation failed: ${err.message}<br>Please try again later.
     </p>`;
-    // No fallback
+    // No fallback – just show error
     return;
   }
 }
