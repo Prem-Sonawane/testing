@@ -760,58 +760,53 @@ function showWaitingScreen(uid) {
 }
 
 /* ═══ CONVERSATION ═══════════════════════════════════════ */
-const SYSTEM_PROMPT = `You are a career counsellor inside Curious AI, a career guidance platform for Indian Class 10 students.
+/* ═══════════════════════════════════════════════════════════
+   HARDCODED QUESTION BANK — 12 fixed questions + 1 closing.
+   Gemini only generates a warm 1-sentence acknowledgement of
+   the student's previous answer. The next question is always
+   appended from this array — never left to the AI to decide.
+═══════════════════════════════════════════════════════════ */
+const CONV_QUESTIONS = [
+  // Q1 — opener (shown immediately, no prior answer to acknowledge)
+  `Hi {name}! Really glad you're here — this isn't a test, just an honest conversation to help figure out the right path for you after Class 10. What do you genuinely enjoy doing when nobody is telling you what to do — any hobby or thing you just can't stop thinking about?`,
+  // Q2
+  `What's your favourite subject in school, and what do you like about it?`,
+  // Q3
+  `Between Science, Commerce, and Arts — which stream feels most like you, even if you're not 100% sure yet?`,
+  // Q4
+  `If you're leaning toward Science, do you feel more drawn to Physics and Maths (PCM) or Biology (PCB)? And if it's Commerce or Arts, what draws you to it?`,
+  // Q5
+  `Within that, is there a specific field that excites you — like engineering, medicine, coding, finance, or design?`,
+  // Q6
+  `When you face a problem, do you prefer figuring out the logic behind it step by step, or do you jump straight to a creative idea?`,
+  // Q7
+  `Do you prefer working alone or in a team — and are you usually the one leading or the one supporting?`,
+  // Q8
+  `Imagine yourself at 25 — what does your life look like?`,
+  // Q9
+  `What's your dream profession, even if it sounds unrealistic right now?`,
+  // Q10
+  `Is there any career or type of work you know for sure you never want to do?`,
+  // Q11
+  `Who is someone you really look up to — and what is it about them that inspires you?`,
+  // Q12
+  `What's one thing you're genuinely good at that nobody really taught you?`,
+];
 
-YOUR ONLY JOB: Ask meaningful questions across 12 turns to understand this student well enough to recommend Science, Commerce, or Arts — and within Science, whether PCM or PCB and which subdomain.
+const CONV_CLOSING = `Thank you so much, {name} — it was wonderful getting to know you! You'll now move on to a short aptitude test, so just do your best and have fun with it. Good luck!`;
 
-MANDATORY RULES — EVERY RESPONSE MUST:
-- Be exactly 2 to 3 sentences long. Never more, never less.
-- End with a question mark. (Exception: turn 12 – see below.)
-- Be complete — no cut-off sentences, no trailing ellipses.
-- Use plain English, as if spoken aloud (for Text-to-Speech).
-- Never repeat or summarise what the student just said.
-- Never use markdown, asterisks, or bullet points.
-- Never use numbered lists. Never write "1.", "2.", "3." or any number followed by a period or bracket inside your response prose.
-- Never use a colon to introduce a list. If you want to mention multiple things, join them naturally with "and" or "but" in a single flowing sentence.
-- Never include [DONE] before turn 12.
-- **Stay within a 250‑token budget. This is a hard limit – if you exceed it, your response will be cut off mid‑sentence. Keep it concise.**
-
-TURN SEQUENCE AND TOPICS:
-You have 11 turns to cover all the topics below. Each turn MUST introduce a NEW topic – do not ask follow‑up questions on the same topic, even if the student elaborates. Acknowledge their answer briefly, then pivot to the next topic.
-
-Topics to cover (use each once in any order, but cover them all by turn 11):
-1. Personal interests (what they enjoy outside school)
-2. Hobbies (specific activities they are passionate about)
-3. Activities they enjoy doing in their free time
-4. Future goals / what kind of life they imagine at age 25
-5. School subjects they like most and why
-6. Their inclination toward Science, Commerce, or Arts
-7. If Science, whether they lean toward PCM (Physics, Maths) or PCB (Biology)
-8. Subdomains within PCM/PCB (e.g., engineering, medicine, research)
-9. Analytical thinking vs creative thinking – which comes more naturally
-10. Leadership, teamwork, curiosity – how they work with others or explore new ideas
-11. Dream profession (pilot, navy officer, entrepreneur, scientist, designer, etc.)
-12. Closing turn: thank the student, say they will now move to the aptitude test, and wish them luck. Do NOT ask a question. End with a warm sentence, then on a NEW LINE write exactly: [DONE]
-
-EXAMPLE OF A GOOD RESPONSE (turn about hobbies):
-"I notice you really enjoy sketching characters from your favourite shows. That kind of creative expression often connects to design or storytelling careers. Have you ever thought about learning digital illustration or animation?"
-
-BAD RESPONSES (will be rejected):
-- "Okay, thanks for sharing. What about..." (filler, too short)
-- "Which subject do you enjoy most?" (only one sentence, too short)
-- Any response that repeats a topic already discussed (e.g., asking a second question about the same hobby).
-- "This tells me several things about you: 1. You enjoy data 2. You think analytically" (numbered list — strictly forbidden)
-- "This tells me several things about you:" (colon introducing a list — strictly forbidden, merge into a flowing sentence instead)
-
-STRICT ENFORCEMENT:
-- Count your sentences. More than 3 = failure.
-- No question mark at end (turns 1–11) = failure.
-- Incomplete sentence = failure.
-- Numbered list or colon-introduced list = failure.
-- Turn 12 must not contain a question mark – it must be a closing statement only.`;
+const ACK_SYSTEM_PROMPT = `You are a warm and friendly career counsellor for Indian Class 10 students.
+The student just answered a question. Write EXACTLY ONE short sentence acknowledging their answer naturally and warmly.
+Rules:
+- Maximum 15 words.
+- Do NOT ask any question — a hardcoded question will be added after your sentence.
+- Do NOT give advice or suggest careers.
+- Do NOT repeat the student's exact words back to them.
+- Sound genuine, not robotic. Example: "That's a great passion to have!" or "Love that — numbers and business go really well together."
+- Plain English only. No markdown, no bullet points.`;
 
 function startConversation() {
-  const opener = `Hi ${S.name}! Really glad you're here — this isn't a test, just an honest conversation to help figure out the right path for you after Class 10.\n\nLet's start with something simple: what do you genuinely enjoy doing when nobody is telling you what to do — any hobby, activity, or thing you just can't stop thinking about?`;
+  const opener = CONV_QUESTIONS[0].replace(/{name}/g, S.name);
   addAIMsg(opener); addHistory("assistant", opener); S.qCount = 1;
   if (S.convMode === 'chat') {
     const ta = document.getElementById("chatTA");
@@ -821,10 +816,36 @@ function startConversation() {
 function addHistory(role,content){S.history.push({role,content});}
 
 async function askConversationQuestion() {
-  return await gemini(
-    [{ role: "system", content: SYSTEM_PROMPT }, ...S.history],
-    600, 0.7
-  );
+  // qCount is 1-based. After opener (Q1), student answers → qCount becomes 2 → serve Q2, etc.
+  // When qCount > 12, serve closing message (no Gemini call needed).
+  const nextQIndex = S.qCount; // CONV_QUESTIONS index to serve next
+
+  if (nextQIndex >= CONV_QUESTIONS.length) {
+    // All 12 questions done — return closing token
+    return "[CLOSING]";
+  }
+
+  // Get the hardcoded next question
+  const nextQuestion = CONV_QUESTIONS[nextQIndex];
+
+  // Ask Gemini only for a 1-sentence warm acknowledgement of the last student answer
+  const lastUserMsg = [...S.history].reverse().find(m => m.role === "user");
+  let ack = "";
+  if (lastUserMsg) {
+    try {
+      ack = await gemini([
+        { role: "system", content: ACK_SYSTEM_PROMPT },
+        { role: "user",   content: lastUserMsg.content }
+      ], 60, 0.85);
+      // Safety: strip any question marks Gemini sneaks in, trim to one sentence
+      ack = ack.split(/[.!?]/)[0].replace(/\?/g, "").trim();
+      if (ack) ack = ack + ". ";
+    } catch(e) {
+      ack = ""; // if Gemini fails, just show the question directly
+    }
+  }
+
+  return ack + nextQuestion;
 }
 
 function setInputState(locked) {
@@ -933,17 +954,20 @@ async function sendMessage() {
   ta.value=""; ta.style.height="auto"; setLock(true); setTyping(true);
   try {
     const reply = await askConversationQuestion();
-    const isFinal = reply.includes("[DONE]");
-    const cleanReply = ensureMaxThreeSentences(reply, isFinal);
     setTyping(false);
-    if (isFinal){
-      const final = cleanReply.replace("[DONE]","").trim();
-      if(final){addAIMsg(final);addHistory("assistant",final);}
-      finishConversation();
-    } else {
-      addAIMsg(cleanReply); addHistory("assistant",cleanReply); S.qCount++;
-      if(S.qCount>11)finishConversation();
+
+    if (reply === "[CLOSING]") {
+      // All 12 questions answered — show fixed closing message then finish
+      const closing = CONV_CLOSING.replace(/{name}/g, S.name);
+      addAIMsg(closing); addHistory("assistant", closing);
+      setTimeout(() => finishConversation(), 400);
+      return;
     }
+
+    // Normal turn — reply is already (ack + hardcoded question), no sentence trimming needed
+    addAIMsg(reply); addHistory("assistant", reply);
+    S.qCount++;
+
     if (S.convMode === 'chat' && !S.convDone) setLock(false);
   } catch(err){
     setTyping(false);
@@ -2288,17 +2312,14 @@ document.addEventListener("DOMContentLoaded",()=>{
     (async () => {
       try {
         const reply = await askConversationQuestion();
-        const isFinal = reply.includes('[DONE]');
-        const cleanReply = ensureMaxThreeSentences(reply, isFinal);
         setTyping(false);
-        if (isFinal) {
-          const final = cleanReply.replace('[DONE]','').trim();
-          if (final) { addAIMsg(final); addHistory('assistant', final); }
-          finishConversation();
-        } else {
-          addAIMsg(cleanReply); addHistory('assistant', cleanReply); S.qCount++;
-          if (S.qCount > 11) finishConversation();
+        if (reply === '[CLOSING]') {
+          const closing = CONV_CLOSING.replace(/{name}/g, S.name);
+          addAIMsg(closing); addHistory('assistant', closing);
+          setTimeout(() => finishConversation(), 400);
+          return;
         }
+        addAIMsg(reply); addHistory('assistant', reply); S.qCount++;
       } catch(err) {
         setTyping(false);
         const ef = document.getElementById('chatFeed');
@@ -2348,17 +2369,14 @@ document.addEventListener("DOMContentLoaded",()=>{
           if (typingEl) typingEl.classList.remove('hidden');
           try {
             const reply = await askConversationQuestion();
-            const isFinal = reply.includes('[DONE]');
-            const cleanReply = ensureMaxThreeSentences(reply, isFinal);
             if (typingEl) typingEl.classList.add('hidden');
-            if (isFinal) {
-              const final = cleanReply.replace('[DONE]','').trim();
-              if (final) { addAIMsg(final); addHistory('assistant', final); }
-              finishConversation();
-            } else {
-              addAIMsg(cleanReply); addHistory('assistant', cleanReply); S.qCount++;
-              if (S.qCount > 11) finishConversation();
+            if (reply === '[CLOSING]') {
+              const closing = CONV_CLOSING.replace(/{name}/g, S.name);
+              addAIMsg(closing); addHistory('assistant', closing);
+              setTimeout(() => finishConversation(), 400);
+              return;
             }
+            addAIMsg(reply); addHistory('assistant', reply); S.qCount++;
           } catch(err) {
             if (typingEl) typingEl.classList.add('hidden');
             const ef=document.getElementById('chatFeed');
