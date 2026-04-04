@@ -2943,9 +2943,19 @@ function openStudentReport(session) {
   document.getElementById("dashLoading").style.display = "none";
   renderDashboard(S.reportData);
 
-  document.getElementById("btnRestart").onclick = () => {
-    dash.classList.add("hidden");
-    document.getElementById("adminDashboard").classList.remove("hidden");
-    renderAdminDashboard();
-  };
+  // Admin view: show Back to Dashboard, hide New Session
+  const btnBackAdmin = document.getElementById("btnBackAdmin");
+  const btnRestart   = document.getElementById("btnRestart");
+  if (btnBackAdmin) btnBackAdmin.classList.remove("hidden");
+  if (btnRestart)   btnRestart.classList.add("hidden");
+
+  if (btnBackAdmin) {
+    btnBackAdmin.onclick = () => {
+      dash.classList.add("hidden");
+      btnBackAdmin.classList.add("hidden");
+      if (btnRestart) btnRestart.classList.remove("hidden");
+      document.getElementById("adminDashboard").classList.remove("hidden");
+      renderAdminDashboard();
+    };
+  }
 }
