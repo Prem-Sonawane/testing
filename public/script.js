@@ -2526,6 +2526,8 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAdminGrid(getCurrentFilter(), getCurrentSearch());
   });
 
+  initSortDropdown();
+
   const tabApproved = document.getElementById("admTabApproved");
   const tabRejected = document.getElementById("admTabRejected");
   if (tabApproved && tabRejected) {
@@ -2569,6 +2571,239 @@ function getCurrentFilter() {
 function getCurrentSearch() {
   const el = document.getElementById("admSearch");
   return el ? el.value.toLowerCase().trim() : "";
+}
+
+/* ═══ SORT STATE ═══════════════════════════════════════════ */
+let _currentSort = "none"; // "none" | "stream" | "date"
+
+function getCurrentSort() { return _currentSort; }
+
+function initSortDropdown() {
+  const btn      = document.getElementById("admSortBtn");
+  const dropdown = document.getElementById("admSortDropdown");
+  const label    = document.getElementById("admSortLabel");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("hidden");
+    btn.classList.toggle("active");
+  });
+
+  document.addEventListener("click", () => {
+    dropdown.classList.add("hidden");
+    btn.classList.remove("active");
+  });
+
+  dropdown.querySelectorAll(".adm-sort-option").forEach(opt => {
+    opt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _currentSort = opt.dataset.sort;
+      const icons = { none: "⊞ ", stream: "🎓 ", date: "📅 " };
+      const names = { none: "Sort By", stream: "By Stream", date: "By Date" };
+      label.textContent = icons[_currentSort] + names[_currentSort];
+      dropdown.querySelectorAll(".adm-sort-option").forEach(o => o.classList.remove("active"));
+      opt.classList.add("active");
+      dropdown.classList.add("hidden");
+      btn.classList.remove("active");
+      renderAdminGrid(getCurrentFilter(), getCurrentSearch());
+    });
+  });
+}
+
+/* ═══ FOLDER HELPERS ═══════════════════════════════════════ */
+function getStreamFolder(session) {
+  const s = (session.reportData?.streamRecommendation || "").toLowerCase();
+  if (s.includes("science")) return "Science";
+  if (s.includes("commerce")) return "Commerce";
+  if (s.includes("arts")) return "Arts";
+  return "Pending";
+}
+
+function getDateFolder(session) {
+  const d   = new Date(session.date);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays <= 7) return "This Week";
+  if (diffDays <= 30) return "This Month";
+  return d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+}
+
+function renderFolders(sessions, folderFn, folderOrder) {
+  const grid    = document.getElementById("admGrid");
+  const emptyEl = document.getElementById("admEmpty");
+  grid.innerHTML = "";
+
+  if (sessions.length === 0) {
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+  emptyEl.classList.add("hidden");
+
+  // Group sessions into folders
+  const groups = {};
+  sessions.forEach(s => {
+    const key = folderFn(s);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+
+  // Determine folder order
+  let keys = folderOrder ? folderOrder.filter(k => groups[k]) : Object.keys(groups);
+  // Add any keys not in explicit order at end
+  Object.keys(groups).forEach(k => { if (!keys.includes(k)) keys.push(k); });
+
+  keys.forEach((folderName, fi) => {
+    const items = groups[folderName];
+    if (!items || items.length === 0) return;
+
+    const folderEl = document.createElement("div");
+    folderEl.className = "adm-folder";
+    folderEl.style.animationDelay = `${fi * 0.06}s`;
+
+    const folderIcons = { "Science": "🔬", "Commerce": "📊", "Arts": "🎨", "Pending": "⏳",
+      "Today": "📅", "Yesterday": "🗓", "This Week": "📆", "This Month": "🗂" };
+    const icon = folderIcons[folderName] || "📁";
+
+    folderEl.innerHTML = `
+      <div class="adm-folder-header" data-folder="${folderName}">
+        <div class="adm-folder-left">
+          <div class="adm-folder-icon-wrap">
+            <span class="adm-folder-icon">${icon}</span>
+          </div>
+          <div>
+            <div class="adm-folder-name">${folderName}</div>
+            <div class="adm-folder-count">${items.length} student${items.length !== 1 ? "s" : ""}</div>
+          </div>
+        </div>
+        <svg class="adm-folder-chevron open" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M5 7l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="adm-folder-body"></div>`;
+
+    const body = folderEl.querySelector(".adm-folder-body");
+    const chevron = folderEl.querySelector(".adm-folder-chevron");
+    const header = folderEl.querySelector(".adm-folder-header");
+
+    // Render cards inside folder
+    const innerGrid = document.createElement("div");
+    innerGrid.className = "adm-folder-grid";
+    items.forEach((s, idx) => {
+      const card = buildAdminCard(s, idx);
+      innerGrid.appendChild(card);
+    });
+    body.appendChild(innerGrid);
+
+    // Toggle open/close
+    header.addEventListener("click", () => {
+      const isOpen = body.classList.contains("open");
+      body.classList.toggle("open");
+      chevron.classList.toggle("open");
+    });
+
+    // Start open
+    body.classList.add("open");
+
+    folderEl.style.gridColumn = "1 / -1";
+    grid.appendChild(folderEl);
+  });
+}
+
+/* ═══ EXTRACT CARD BUILD TO REUSE ══════════════════════════ */
+function buildAdminCard(s, idx) {
+  const card = document.createElement("div");
+  card.className = "adm-card";
+  card.style.animationDelay = `${idx * 0.04}s`;
+
+  const stream    = s.reportData?.streamRecommendation || "";
+  const hasReport = !!stream;
+  const initials  = (s.name||"?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0,2);
+  const dateStr   = new Date(s.date).toLocaleDateString("en-IN", {day:"numeric", month:"short", year:"numeric"});
+  const total     = s.scores ? Math.round(Object.values(s.scores).reduce((a,b)=>a+b,0)/5) : 0;
+
+  const aptBars = s.scores ? [
+    ["Numerical", s.scores.numerical],
+    ["Logical",   s.scores.logical],
+    ["Verbal",    s.scores.verbal],
+    ["Abstract",  s.scores.abstract],
+    ["Data Int.", s.scores.dataInt],
+  ].map(([label,val])=>`
+    <div class="adm-card-apt-row">
+      <span class="adm-card-apt-name">${label}</span>
+      <div class="adm-card-apt-track"><div class="adm-card-apt-fill" style="width:${val||0}%;background:${(val||0)>=70?"var(--gold)":(val||0)>=50?"#f59e0b":"var(--red,#ef4444)"}"></div></div>
+      <span class="adm-card-apt-pct">${val||0}%</span>
+    </div>`).join("") : '<div class="adm-card-apt-name" style="color:var(--txt3)">No aptitude data</div>';
+
+  card.innerHTML = `
+    <div class="adm-card-header">
+      <div class="adm-card-avatar">${initials}</div>
+      <div class="adm-card-name-wrap">
+        <div class="adm-card-name">${s.name}</div>
+        <div class="adm-card-city">${s.city || "—"}</div>
+      </div>
+      <div class="adm-card-stream-badge ${hasReport?"":"pending"}">${hasReport ? stream : "PENDING"}</div>
+    </div>
+    <div class="adm-card-body">
+      <div class="adm-card-info-row">
+        <div class="adm-card-info-item">
+          <span class="adm-card-info-label">Age</span>
+          <span class="adm-card-info-val">${s.age || "—"}</span>
+        </div>
+        <div class="adm-card-info-item">
+          <span class="adm-card-info-label">Phone</span>
+          <span class="adm-card-info-val">${s.phone || "—"}</span>
+        </div>
+        <div class="adm-card-info-item">
+          <span class="adm-card-info-label">Email</span>
+          <span class="adm-card-info-val" title="${s.email||''}">${s.email || "—"}</span>
+        </div>
+        <div class="adm-card-info-item">
+          <span class="adm-card-info-label">Overall Aptitude</span>
+          <span class="adm-card-info-val" style="color:var(--gold);font-family:var(--mono);font-weight:700">${total}%</span>
+        </div>
+      </div>
+      <div class="adm-card-apt">
+        <div class="adm-card-apt-label"><span>APTITUDE BREAKDOWN</span></div>
+        <div class="adm-card-apt-bars">${aptBars}</div>
+      </div>
+    </div>
+    <div class="adm-card-footer">
+      <span class="adm-card-date">${dateStr}</span>
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        ${hasReport ? `<span class="adm-card-cta">View Full Report →</span>` : `<span class="adm-card-date" style="color:var(--txt3)">Report not generated</span>`}
+        <button class="adm-card-delete" data-docid="${s._docId || ""}">✕ Delete</button>
+      </div>
+    </div>`;
+
+  const delBtn = card.querySelector(".adm-card-delete");
+  if (delBtn) {
+    delBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const docId = e.currentTarget.dataset.docid;
+      if (!docId) { alert("Cannot delete: document ID missing."); return; }
+      if (!confirm(`Permanently delete ${s.name || "this student"}'s session? This cannot be undone.`)) return;
+      e.currentTarget.disabled = true;
+      e.currentTarget.textContent = "Deleting…";
+      try {
+        await fbDb.collection("completedSessions").doc(docId).delete();
+        _adminSessions = _adminSessions.filter(x => x._docId !== docId);
+        document.getElementById("admTotalCount").textContent    = _adminSessions.length;
+        document.getElementById("admCompleteCount").textContent = _adminSessions.filter(x => x.reportData?.streamRecommendation).length;
+        document.getElementById("admSciCount").textContent      = _adminSessions.filter(x => (x.reportData?.streamRecommendation||"").toLowerCase().includes("science")).length;
+        renderAdminGrid(getCurrentFilter(), getCurrentSearch());
+      } catch(err) {
+        console.error("Delete session error:", err);
+        e.currentTarget.disabled = false;
+        e.currentTarget.textContent = "✕ Delete";
+      }
+    });
+  }
+
+  if (hasReport) {
+    card.addEventListener("click", () => openStudentReport(s));
+  }
+  return card;
 }
 
 function listenPendingRequests() {
@@ -2805,6 +3040,7 @@ function renderAdminGrid(filter, search) {
   const sessions = _adminSessions;
   const grid     = document.getElementById("admGrid");
   const emptyEl  = document.getElementById("admEmpty");
+  const sort     = getCurrentSort();
 
   let filtered = sessions.filter(s => {
     const stream = (s.reportData?.streamRecommendation || "").toLowerCase();
@@ -2819,6 +3055,17 @@ function renderAdminGrid(filter, search) {
     return true;
   });
 
+  // ── FOLDER MODE ──
+  if (sort === "stream") {
+    renderFolders(filtered, getStreamFolder, ["Science", "Commerce", "Arts", "Pending"]);
+    return;
+  }
+  if (sort === "date") {
+    renderFolders(filtered, getDateFolder, ["Today", "Yesterday", "This Week", "This Month"]);
+    return;
+  }
+
+  // ── DEFAULT FLAT GRID ──
   grid.innerHTML = "";
   if (filtered.length === 0) {
     emptyEl.classList.remove("hidden");
@@ -2827,98 +3074,7 @@ function renderAdminGrid(filter, search) {
   emptyEl.classList.add("hidden");
 
   filtered.forEach((s, idx) => {
-    const card = document.createElement("div");
-    card.className = "adm-card";
-    card.style.animationDelay = `${idx * 0.04}s`;
-
-    const stream    = s.reportData?.streamRecommendation || "";
-    const hasReport = !!stream;
-    const initials  = (s.name||"?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0,2);
-    const dateStr   = new Date(s.date).toLocaleDateString("en-IN", {day:"numeric", month:"short", year:"numeric"});
-    const total     = s.scores ? Math.round(Object.values(s.scores).reduce((a,b)=>a+b,0)/5) : 0;
-
-    const aptBars = s.scores ? [
-      ["Numerical", s.scores.numerical],
-      ["Logical",   s.scores.logical],
-      ["Verbal",    s.scores.verbal],
-      ["Abstract",  s.scores.abstract],
-      ["Data Int.", s.scores.dataInt],
-    ].map(([label,val])=>`
-      <div class="adm-card-apt-row">
-        <span class="adm-card-apt-name">${label}</span>
-        <div class="adm-card-apt-track"><div class="adm-card-apt-fill" style="width:${val||0}%;background:${(val||0)>=70?"var(--gold)":(val||0)>=50?"#f59e0b":"var(--red,#ef4444)"}"></div></div>
-        <span class="adm-card-apt-pct">${val||0}%</span>
-      </div>`).join("") : '<div class="adm-card-apt-name" style="color:var(--txt3)">No aptitude data</div>';
-
-    card.innerHTML = `
-      <div class="adm-card-header">
-        <div class="adm-card-avatar">${initials}</div>
-        <div class="adm-card-name-wrap">
-          <div class="adm-card-name">${s.name}</div>
-          <div class="adm-card-city">${s.city || "—"}</div>
-        </div>
-        <div class="adm-card-stream-badge ${hasReport?"":"pending"}">${hasReport ? stream : "PENDING"}</div>
-      </div>
-      <div class="adm-card-body">
-        <div class="adm-card-info-row">
-          <div class="adm-card-info-item">
-            <span class="adm-card-info-label">Age</span>
-            <span class="adm-card-info-val">${s.age || "—"}</span>
-          </div>
-          <div class="adm-card-info-item">
-            <span class="adm-card-info-label">Phone</span>
-            <span class="adm-card-info-val">${s.phone || "—"}</span>
-          </div>
-          <div class="adm-card-info-item">
-            <span class="adm-card-info-label">Email</span>
-            <span class="adm-card-info-val" title="${s.email||''}">${s.email || "—"}</span>
-          </div>
-          <div class="adm-card-info-item">
-            <span class="adm-card-info-label">Overall Aptitude</span>
-            <span class="adm-card-info-val" style="color:var(--gold);font-family:var(--mono);font-weight:700">${total}%</span>
-          </div>
-        </div>
-        <div class="adm-card-apt">
-          <div class="adm-card-apt-label"><span>APTITUDE BREAKDOWN</span></div>
-          <div class="adm-card-apt-bars">${aptBars}</div>
-        </div>
-      </div>
-      <div class="adm-card-footer">
-        <span class="adm-card-date">${dateStr}</span>
-        <div style="display:flex;align-items:center;gap:.6rem;">
-          ${hasReport ? `<span class="adm-card-cta">View Full Report →</span>` : `<span class="adm-card-date" style="color:var(--txt3)">Report not generated</span>`}
-          <button class="adm-card-delete" data-docid="${s._docId || ""}">✕ Delete</button>
-        </div>
-      </div>`;
-
-    const delBtn = card.querySelector(".adm-card-delete");
-    if (delBtn) {
-      delBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const docId = e.currentTarget.dataset.docid;
-        if (!docId) { alert("Cannot delete: document ID missing."); return; }
-        if (!confirm(`Permanently delete ${s.name || "this student"}'s session? This cannot be undone.`)) return;
-        e.currentTarget.disabled = true;
-        e.currentTarget.textContent = "Deleting…";
-        try {
-          await fbDb.collection("completedSessions").doc(docId).delete();
-          _adminSessions = _adminSessions.filter(x => x._docId !== docId);
-          document.getElementById("admTotalCount").textContent    = _adminSessions.length;
-          document.getElementById("admCompleteCount").textContent = _adminSessions.filter(x => x.reportData?.streamRecommendation).length;
-          document.getElementById("admSciCount").textContent      = _adminSessions.filter(x => (x.reportData?.streamRecommendation||"").toLowerCase().includes("science")).length;
-          renderAdminGrid(getCurrentFilter(), getCurrentSearch());
-        } catch(err) {
-          console.error("Delete session error:", err);
-          e.currentTarget.disabled = false;
-          e.currentTarget.textContent = "✕ Delete";
-        }
-      });
-    }
-
-    if (hasReport) {
-      card.addEventListener("click", () => openStudentReport(s));
-    }
-    grid.appendChild(card);
+    grid.appendChild(buildAdminCard(s, idx));
   });
 }
 

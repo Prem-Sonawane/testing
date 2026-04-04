@@ -656,6 +656,24 @@
         <button class="adm-pill" data-filter="commerce">Commerce</button>
         <button class="adm-pill" data-filter="arts">Arts</button>
       </div>
+      <div class="adm-sort-wrap">
+        <button class="adm-sort-btn" id="admSortBtn">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="13" height="13"><path d="M3 5h14M6 10h8M9 15h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span id="admSortLabel">Sort By</span>
+          <svg class="adm-sort-chevron" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="11" height="11"><path d="M5 7l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="adm-sort-dropdown hidden" id="admSortDropdown">
+          <button class="adm-sort-option" data-sort="none">
+            <span class="adm-sort-opt-icon">⊞</span> Default (Latest First)
+          </button>
+          <button class="adm-sort-option" data-sort="stream">
+            <span class="adm-sort-opt-icon">🎓</span> Sort by Stream
+          </button>
+          <button class="adm-sort-option" data-sort="date">
+            <span class="adm-sort-opt-icon">📅</span> Sort by Date
+          </button>
+        </div>
+      </div>
     </div>
     <div class="adm-empty hidden" id="admEmpty">
       <div class="adm-empty-icon">🗂</div>
