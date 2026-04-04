@@ -772,6 +772,8 @@ p, h1, h2, h3, h4, h5, li, span { word-wrap: break-word; overflow-wrap: break-wo
 .btn-pdf:hover { background: var(--gold2); }
 .btn-restart { width: 100%; padding: 10px 20px; background: none; border: 1px solid var(--bdr); border-radius: 6px; color: var(--txt2); font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; cursor: pointer; line-height: 1; }
 .btn-restart:hover { border-color: var(--red); color: var(--red); }
+.btn-back-admin { width: 100%; padding: 10px 20px; background: none; border: 1px solid var(--gold); border-radius: 6px; color: var(--gold); font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; cursor: pointer; line-height: 1; transition: background .18s, color .18s; }
+.btn-back-admin:hover { background: var(--gold); color: #000; }
 .dash-main { margin-left: 260px; width: calc(100vw - 260px); min-height: 100vh; box-sizing: border-box; }
 .dash-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 20px; text-align: center; padding: 40px; }
 .dl-spinner   { width: 44px; height: 44px; border: 2px solid var(--bdr2); border-top-color: var(--gold); border-radius: 50%; animation: spin 1s linear infinite; }
