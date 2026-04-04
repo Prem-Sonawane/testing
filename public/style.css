@@ -767,7 +767,7 @@ p, h1, h2, h3, h4, h5, li, span { word-wrap: break-word; overflow-wrap: break-wo
 .dsn-link   { display: block; font-family: var(--mono); font-size: .75rem; font-weight: 600; letter-spacing: .06em; color: var(--txt2); padding: 13px 22px; text-decoration: none; border-left: 2px solid transparent; }
 .dsn-link:hover  { color: var(--txt); background: var(--surf2); border-left-color: var(--bdr3); }
 .dsn-link.active { color: var(--gold); border-left-color: var(--gold); background: var(--goldD); font-weight: 700; }
-.ds-foot     { padding: 16px 18px; border-top: 1px solid var(--bdr); display: flex; flex-direction: column; gap: 8px; }
+.ds-foot     { padding: 16px 18px; border-top: 1px solid var(--bdr); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 .btn-pdf     { width: 100%; padding: 11px 20px; background: var(--gold); border: 1px solid rgba(0,0,0,.15); border-radius: 6px; color: #0a0a0a; font-family: var(--mono); font-size: .7rem; font-weight: 700; letter-spacing: .08em; cursor: pointer; line-height: 1; }
 .btn-pdf:hover { background: var(--gold2); }
 .btn-restart { width: 100%; padding: 10px 20px; background: none; border: 1px solid var(--bdr); border-radius: 6px; color: var(--txt2); font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; cursor: pointer; line-height: 1; }
@@ -2867,7 +2867,8 @@ h1, h2, h3, .sec-title, .dh-stream, .ob-pitch h1 {
     background: var(--surface);
   }
   .ds-foot .btn-pdf,
-  .ds-foot .btn-restart {
+  .ds-foot .btn-restart,
+  .ds-foot .btn-back-admin {
     flex: 1;
   }
   .dash-hero {
