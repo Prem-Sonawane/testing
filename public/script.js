@@ -1041,68 +1041,79 @@ async function initProfessions() {
   }
 
   try {
-    // Use last 3 user messages, cleaned
+    // Clean conversation text: remove double quotes, backslashes, newlines, and non-ASCII
+    const clean = (str) => str
+      .replace(/["\\\n\r\t]/g, ' ')
+      .replace(/[^\x20-\x7E]/g, '')
+      .substring(0, 80);
     const convStr = S.history
       .filter(m => m.role === "user")
-      .map(m => m.content.substring(0, 100).replace(/[\\"]/g, ' '))
+      .map(m => clean(m.content))
       .slice(-3)
       .join(" | ");
     const aptStr = Object.entries(S.scores)
       .map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`)
       .join(", ");
 
-    const prompt = `You are a career counsellor for Indian Class 10 students.
-
-Generate exactly 10 career options based on the student's conversation and aptitude scores. All 10 should be tailored to this student — no fixed templates.
+    const prompt = `Generate exactly 10 career options for an Indian Class 10 student. Return ONLY a valid JSON array. No extra text.
 
 Student: ${S.name}
-What they said: "${convStr}"
+Conversation: ${convStr}
 Aptitude: ${aptStr}
 
-For each career provide:
-- emoji: one relevant emoji
-- title: 2-4 words
-- description: one sentence (max 10 words)
-- stream: PCM / PCB / Commerce / Arts / Any
+Each object must have exactly these keys:
+- "e": emoji (string)
+- "t": career title (short, 2-4 words)
+- "d": description (one sentence, max 10 words)
+- "s": stream (PCM, PCB, Commerce, Arts, or Any)
 
-Return ONLY a valid JSON array, no markdown, no extra text. Escape double quotes inside strings.
 Example: {"e":"🤖","t":"AI Engineer","d":"Builds intelligent systems","s":"PCM"}
 
-Output:
-[
-  {"e":"emoji","t":"Career Title","d":"Description","s":"stream"},
-  ... 10 items total
-]`;
+Output must be a JSON array of 10 objects. Do not include any other text.`;
 
     const raw = await gemini(
-      [{ role: "system", content: "Output ONLY a valid JSON array. Nothing else. No markdown. Escape double quotes inside strings." }, { role: "user", content: prompt }],
-      2000,  // increased token limit
+      [{ role: "system", content: "You are a JSON generator. Output only valid JSON arrays. Never include any other text or markdown." }, { role: "user", content: prompt }],
+      2500, // increased token limit
       0.7,
       "gemini-2.5-flash",
       "careers"
     );
 
-    console.log("Raw Gemini careers response:", raw);
+    console.log("Raw Gemini response:", raw);
 
-    // Extract JSON array
+    // Extract JSON array from response (in case Gemini adds anything)
     let jsonStr = raw;
-    const jsonMatch = raw.match(/\[[\s\S]*\]/);
-    if (jsonMatch) jsonStr = jsonMatch[0];
+    const match = raw.match(/\[\s*\{.*\}\s*\]/s);
+    if (match) jsonStr = match[0];
+
+    // Repair common JSON issues: unescape quotes inside string values
+    function repairJSON(str) {
+      // This is a basic repair: replace unescaped double quotes inside string values
+      // We'll use a simple regex that looks for "key": "value" and escapes any quotes inside value
+      // A more robust solution would use a JSON parser with error recovery, but this works for common cases.
+      return str.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, content) => {
+        const escapedContent = content.replace(/"/g, '\\"');
+        return `"${escapedContent}"`;
+      });
+    }
 
     let pool;
     try {
       pool = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error("First parse failed, attempting repair...");
-      // Naive repair: replace unescaped double quotes inside strings
-      const repaired = jsonStr.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, p1) => {
-        return '"' + p1.replace(/"/g, '\\"') + '"';
-      });
-      pool = JSON.parse(repaired);
+    } catch (firstError) {
+      console.warn("First parse failed, attempting repair...");
+      const repaired = repairJSON(jsonStr);
+      try {
+        pool = JSON.parse(repaired);
+      } catch (secondError) {
+        console.error("Repair also failed. Raw substring:", jsonStr.substring(0, 500));
+        throw new Error(`Invalid JSON from Gemini: ${firstError.message}`);
+      }
     }
 
-    if (!Array.isArray(pool) || pool.length < 5) throw new Error("Invalid array");
-    pool = pool.slice(0, 10);
+    if (!Array.isArray(pool) || pool.length !== 10) {
+      throw new Error(`Expected 10 careers, got ${pool.length}`);
+    }
     S.pool = pool;
 
     grid.innerHTML = "";
@@ -1112,10 +1123,10 @@ Output:
       card.dataset.i = i;
       card.style.animationDelay = `${i * 0.05}s`;
       card.innerHTML = `
-        <span class="pc-emoji">${p.e}</span>
-        <div class="pc-title">${p.t}</div>
-        <div class="pc-desc">${p.d}</div>
-        <div class="pc-stream">${p.s}</div>`;
+        <span class="pc-emoji">${p.e || "📌"}</span>
+        <div class="pc-title">${p.t || "Career"}</div>
+        <div class="pc-desc">${p.d || ""}</div>
+        <div class="pc-stream">${p.s || "Any"}</div>`;
       card.addEventListener("click", () => toggleProf(i, card));
       grid.appendChild(card);
     });
@@ -1123,7 +1134,7 @@ Output:
     console.error("Career generation failed:", err);
     grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--red); padding: 2rem;">
       ⚠️ Could not generate personalised careers: ${err.message}<br>
-      Please try again later or contact support.
+      Please try again later.
     </div>`;
     document.getElementById("btnGenerate").disabled = true;
     return;
