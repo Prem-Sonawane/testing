@@ -796,14 +796,27 @@ const CONV_QUESTIONS = [
 const CONV_CLOSING = `Thank you so much, {name} — it was wonderful getting to know you! You'll now move on to a short aptitude test, so just do your best and have fun with it. Good luck!`;
 
 const ACK_SYSTEM_PROMPT = `You are a warm and friendly career counsellor for Indian Class 10 students.
-The student just answered a question. Write EXACTLY ONE short sentence acknowledging their answer naturally and warmly.
+The student just answered a question. Write 1 to 2 sentences acknowledging their answer in a way that feels personal and genuine — as if you actually read and understood exactly what they said.
+
 Rules:
-- Maximum 15 words.
-- Do NOT ask any question — a hardcoded question will be added after your sentence.
-- Do NOT give advice or suggest careers.
-- Do NOT repeat the student's exact words back to them.
-- Sound genuine, not robotic. Example: "That's a great passion to have!" or "Love that — numbers and business go really well together."
-- Plain English only. No markdown, no bullet points.`;
+- Directly reference what the student said — never give a generic response like "That's great!" or "Interesting!" alone.
+- Maximum 30 words total.
+- Do NOT ask any question — a separate question will be added after your response.
+- Do NOT suggest careers or give advice.
+- Sound warm, human, and genuinely interested — like a cool mentor who actually cares.
+- Plain English only. No markdown, no bullet points, no emojis.
+
+Examples of GOOD responses:
+- Student said "I like biology and anatomy" → "Biology and anatomy is such a fascinating area — the human body really is one of the most complex things in existence!"
+- Student said "MS Dhoni" → "MS Dhoni is such an inspiring pick — his calm and composure under pressure is truly one of a kind!"
+- Student said "I don't know" → "That's completely okay — most people your age are still figuring this out, and that's totally normal!"
+- Student said "Drawing" → "Drawing is a beautiful skill — and the fact that you taught yourself makes it even more special!"
+- Student said "A rich person" → "Ha, nothing wrong with that ambition — wanting financial freedom is a very real and valid goal!"
+
+Examples of BAD responses (never do these):
+- "That's great!" (too generic, doesn't reference their answer)
+- "Interesting choice!" (hollow, says nothing personal)
+- "Wow, amazing!" (empty praise)`;
 
 function startConversation() {
   const opener = CONV_QUESTIONS[0].replace(/{name}/g, S.name);
@@ -836,10 +849,11 @@ async function askConversationQuestion() {
       ack = await gemini([
         { role: "system", content: ACK_SYSTEM_PROMPT },
         { role: "user",   content: lastUserMsg.content }
-      ], 60, 0.85);
-      // Safety: strip any question marks Gemini sneaks in, trim to one sentence
-      ack = ack.split(/[.!?]/)[0].replace(/\?/g, "").trim();
-      if (ack) ack = ack + ". ";
+      ], 120, 0.9);
+      // Strip any question marks Gemini sneaks in, keep full sentences
+      ack = ack.replace(/[?]/g, "").trim();
+      if (ack && !/[.!]$/.test(ack)) ack = ack + ".";
+      if (ack) ack = ack + " ";
     } catch(e) {
       ack = ""; // if Gemini fails, just show the question directly
     }
@@ -1083,11 +1097,10 @@ async function initProfessions() {
     const clean = (str) => str
       .replace(/["\\\n\r\t]/g, ' ')
       .replace(/[^\x20-\x7E]/g, '')
-      .substring(0, 80);
+      .substring(0, 120);
     const convStr = S.history
       .filter(m => m.role === "user")
       .map(m => clean(m.content))
-      .slice(-3)
       .join(" | ");
     const aptStr = Object.entries(S.scores)
       .map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`)
@@ -1299,7 +1312,7 @@ async function generateReport() {
   const convStr = S.history
     .filter(m => m.role === "user")
     .map(m => clean(m.content))
-    .slice(-3)
+
     .join(" | ");
 
   const prompt = `Generate a career analysis JSON for an Indian Class 10 student. Return ONLY valid JSON. No extra text.
