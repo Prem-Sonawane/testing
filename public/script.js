@@ -1249,7 +1249,7 @@ async function generateReport() {
   const careers = S.ranked.map((idx, r) => `#${r + 1}: ${S.pool[idx].t}`).join(", ");
   const aptStr = Object.entries(S.scores).map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`).join(", ");
   
-  // Clean conversation text: remove double quotes, backslashes, newlines, and non-ASCII
+  // Clean conversation text: remove quotes, backslashes, newlines, non-ASCII
   const clean = (str) => str
     .replace(/["\\\n\r\t]/g, ' ')
     .replace(/[^\x20-\x7E]/g, '')
@@ -1269,53 +1269,72 @@ Career choices (ranked): ${careers}
 
 Output must be a JSON object with exactly these keys:
 {
-  "streamRecommendation": "Science" or "Commerce" or "Arts",
+  "streamRecommendation": "Science (PCM)" or "Science (PCB)" or "Commerce" or "Arts",
   "subjectCombo": "e.g. PCM — Physics, Chemistry, Mathematics",
-  "interestProfile": "4-5 sentences describing this student based on their conversation. Be specific and personal.",
+  "interestProfile": "4-5 sentences describing this student. Use only plain text, no quotes inside.",
   "strengthsIdentified": ["strength1","strength2","strength3","strength4","strength5"],
   "streamScores": { "science": 0-100, "commerce": 0-100, "arts": 0-100 },
-  "detailedGuidance": "6 paragraphs separated by \\n\\n. Cover: why this stream fits them (reference conversation), what to focus on in Std 11-12, 3 specific career paths with context, entrance exams to target, one practical step right now, a direct personal closing. Be honest, specific, and motivating."
+  "detailedGuidance": "6 paragraphs separated by \\n\\n. Use plain text, no double quotes inside. Each paragraph max 100 words."
 }
 
-Do not include any other text or markdown. Escape double quotes inside strings.`;
+IMPORTANT: Do not use double quotes (") anywhere inside the string values. Use apostrophes (') instead. Use \\n for newlines.`;
 
   try {
     const raw = await gemini(
-      [{ role: "system", content: "You are a JSON generator. Output only valid JSON objects. Never include any other text or markdown." }, { role: "user", content: prompt }],
-      4000, // increased token limit
+      [{ role: "system", content: "You are a JSON generator. Output only valid JSON objects. Never include any other text or markdown. Never use double quotes inside string values – use apostrophes instead. Use \\n for newlines." }, { role: "user", content: prompt }],
+      6000,
       0.42,
       "gemini-2.5-flash",
       "report"
     );
-    console.log("Raw report response:", raw);
+    console.log("Raw report response (first 500 chars):", raw.substring(0, 500));
 
-    // Extract JSON object from response (in case Gemini adds anything)
-    let jsonStr = raw;
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) jsonStr = match[0];
+    // Extract JSON object: find first { and last }
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error("No valid JSON object found in response");
+    }
+    let jsonStr = raw.substring(firstBrace, lastBrace + 1);
 
-    // Repair common JSON issues: unescape quotes inside string values
-    function repairJSON(str) {
-      // This regex replaces unescaped double quotes inside string values with escaped ones.
-      // It works by matching "key": "value" and escaping quotes inside the value.
-      return str.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, content) => {
-        const escapedContent = content.replace(/"/g, '\\"');
-        return `"${escapedContent}"`;
-      });
+    // Advanced JSON repair: handle unescaped characters
+    function repairAndParse(str) {
+      // First, try direct parse
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        // If that fails, try to fix common issues:
+        // 1. Replace unescaped double quotes inside strings (but we asked Gemini not to use them)
+        // 2. Replace literal newlines inside strings with \n
+        // 3. Remove any control characters
+        let fixed = str;
+        // Replace any newline characters inside strings (between quotes) with escaped \n
+        // This is tricky; we'll use a regex that matches " ... " and replaces newlines inside
+        fixed = fixed.replace(/"([^"]*?)"/g, (match, content) => {
+          const cleaned = content.replace(/\n/g, '\\n').replace(/\r/g, '');
+          return `"${cleaned}"`;
+        });
+        // Also remove any stray control characters
+        fixed = fixed.replace(/[\x00-\x1F\x7F]/g, '');
+        return JSON.parse(fixed);
+      }
     }
 
     let data;
     try {
-      data = JSON.parse(jsonStr);
-    } catch (firstError) {
-      console.warn("First parse failed, attempting repair...");
-      const repaired = repairJSON(jsonStr);
-      try {
-        data = JSON.parse(repaired);
-      } catch (secondError) {
-        console.error("Repair also failed. Raw substring:", jsonStr.substring(0, 500));
-        throw new Error(`Invalid JSON from Gemini: ${firstError.message}`);
-      }
+      data = repairAndParse(jsonStr);
+    } catch (err) {
+      console.error("JSON parsing failed. Raw substring:", jsonStr.substring(0, 500));
+      throw new Error(`Invalid JSON from Gemini: ${err.message}`);
+    }
+
+    // Validate required fields
+    const validStreams = ["Science (PCM)", "Science (PCB)", "Commerce", "Arts"];
+    if (!data.streamRecommendation || !validStreams.includes(data.streamRecommendation)) {
+      throw new Error(`Invalid stream recommendation: ${data.streamRecommendation}`);
+    }
+    if (!data.subjectCombo || !data.interestProfile || !data.strengthsIdentified || !data.streamScores || !data.detailedGuidance) {
+      throw new Error("Missing required fields in Gemini response");
     }
 
     S.reportData = data;
