@@ -1041,11 +1041,11 @@ async function initProfessions() {
   }
 
   try {
-    // Shorten conversation: last 5 user messages, each trimmed to 100 chars
+    // Use last 3 user messages, cleaned
     const convStr = S.history
       .filter(m => m.role === "user")
-      .map(m => m.content.substring(0, 100))
-      .slice(-5)
+      .map(m => m.content.substring(0, 100).replace(/[\\"]/g, ' '))
+      .slice(-3)
       .join(" | ");
     const aptStr = Object.entries(S.scores)
       .map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`)
@@ -1053,45 +1053,55 @@ async function initProfessions() {
 
     const prompt = `You are a career counsellor for Indian Class 10 students.
 
-Generate exactly 10 career options. Follow this structure strictly:
+Generate exactly 10 career options based on the student's conversation and aptitude scores. All 10 should be tailored to this student — no fixed templates.
 
-FIRST 6 cards — Fixed trendy/high-demand careers, all PCM or PCB oriented (always include all 6):
-1. AI / Machine Learning Engineer — PCM
-2. Cybersecurity Analyst — PCM
-3. Aerospace Engineer — PCM
-4. Biomedical Engineer — PCM/PCB
-5. Data Scientist — PCM
-6. Neuroscientist / Brain Researcher — PCB
+Student: ${S.name}
+What they said: "${convStr}"
+Aptitude: ${aptStr}
 
-LAST 4 cards — Personalised careers based on THIS student:
-Student name: ${S.name}
-Student's own words: "${convStr}"
-Aptitude scores: ${aptStr}
-Generate 4 careers genuinely suited to what this student expressed. Can be any stream.
-
-Rules for all 10:
+For each career provide:
 - emoji: one relevant emoji
-- title: 2-4 words max
-- description: one sharp sentence, max 10 words
+- title: 2-4 words
+- description: one sentence (max 10 words)
 - stream: PCM / PCB / Commerce / Arts / Any
 
-Return ONLY valid JSON array, no markdown, no code fences:
+Return ONLY a valid JSON array, no markdown, no extra text. Escape double quotes inside strings.
+Example: {"e":"🤖","t":"AI Engineer","d":"Builds intelligent systems","s":"PCM"}
+
+Output:
 [
-  {"e":"emoji","t":"Career Title","d":"What they do in one sentence","s":"stream"},
-  ...10 items total
+  {"e":"emoji","t":"Career Title","d":"Description","s":"stream"},
+  ... 10 items total
 ]`;
 
     const raw = await gemini(
-      [{ role: "system", content: "Output ONLY a valid JSON array. Nothing else. No markdown." }, { role: "user", content: prompt }],
-      900, 0.7,
+      [{ role: "system", content: "Output ONLY a valid JSON array. Nothing else. No markdown. Escape double quotes inside strings." }, { role: "user", content: prompt }],
+      2000,  // increased token limit
+      0.7,
       "gemini-2.5-flash",
       "careers"
     );
 
+    console.log("Raw Gemini careers response:", raw);
+
+    // Extract JSON array
+    let jsonStr = raw;
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (jsonMatch) jsonStr = jsonMatch[0];
+
     let pool;
-    const m = raw.match(/\[[\s\S]*\]/);
-    pool = JSON.parse(m ? m[0] : raw);
-    if (!Array.isArray(pool) || pool.length < 5) throw new Error("Bad response from Gemini");
+    try {
+      pool = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("First parse failed, attempting repair...");
+      // Naive repair: replace unescaped double quotes inside strings
+      const repaired = jsonStr.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, p1) => {
+        return '"' + p1.replace(/"/g, '\\"') + '"';
+      });
+      pool = JSON.parse(repaired);
+    }
+
+    if (!Array.isArray(pool) || pool.length < 5) throw new Error("Invalid array");
     pool = pool.slice(0, 10);
     S.pool = pool;
 
