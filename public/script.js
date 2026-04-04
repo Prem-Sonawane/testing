@@ -1241,7 +1241,6 @@ async function saveSessionToAdmin(reportData) {
     console.warn("Firestore save failed (non-critical):", err);
   }
 }
-
 async function generateReport() {
   document.getElementById("dashLoading").style.display = "flex";
   document.getElementById("dashContent").classList.add("hidden");
@@ -1249,7 +1248,6 @@ async function generateReport() {
   const careers = S.ranked.map((idx, r) => `#${r + 1}: ${S.pool[idx].t}`).join(", ");
   const aptStr = Object.entries(S.scores).map(([k, v]) => `${CAT_LABEL[k]}: ${v}%`).join(", ");
   
-  // Clean conversation text
   const clean = (str) => str
     .replace(/["\\\n\r\t]/g, ' ')
     .replace(/[^\x20-\x7E]/g, '')
@@ -1289,17 +1287,17 @@ IMPORTANT: Do not use double quotes (") anywhere inside the string values. Use a
     );
     console.log("Raw report response (first 1000 chars):", raw.substring(0, 1000));
 
-    // Helper: find the first valid JSON object in the string
-    function extractJSON(str) {
+    // ---------- ULTRA ROBUST JSON EXTRACTION & PARSING ----------
+    function extractJSONObject(str) {
+      if (!str) return null;
+      let start = str.indexOf('{');
+      if (start === -1) return null;
       let braceCount = 0;
-      let start = -1;
-      for (let i = 0; i < str.length; i++) {
-        if (str[i] === '{') {
-          if (start === -1) start = i;
-          braceCount++;
-        } else if (str[i] === '}') {
+      for (let i = start; i < str.length; i++) {
+        if (str[i] === '{') braceCount++;
+        else if (str[i] === '}') {
           braceCount--;
-          if (braceCount === 0 && start !== -1) {
+          if (braceCount === 0) {
             return str.substring(start, i + 1);
           }
         }
@@ -1307,55 +1305,99 @@ IMPORTANT: Do not use double quotes (") anywhere inside the string values. Use a
       return null;
     }
 
-    let jsonStr = extractJSON(raw);
-    if (!jsonStr) {
-      throw new Error("No valid JSON object found in response");
-    }
-
-    // Advanced repair function
     function repairJSON(str) {
-      // Remove any control characters (except newlines which we'll handle later)
-      let cleaned = str.replace(/[\x00-\x1F\x7F]/g, '');
-      // Replace any unescaped double quotes inside string values (though we asked Gemini not to use them)
-      // This regex matches "key": "value" and escapes quotes inside value
-      cleaned = cleaned.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, content) => {
+      if (!str) return "";
+      let fixed = str.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+      fixed = fixed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      fixed = fixed.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+      fixed = fixed.replace(/(?<!\\)"([^"]*?)(?<!\\)"/g, (match, content) => {
         const escaped = content.replace(/"/g, '\\"');
         return `"${escaped}"`;
       });
-      // Also replace any literal newlines inside strings with \n (this is tricky but we'll do a simple replace)
-      // We'll assume newlines are only inside string values after the colon
-      cleaned = cleaned.replace(/"([^"]*?)\n([^"]*?)"/g, (match, p1, p2) => `"${p1}\\n${p2}"`);
-      return cleaned;
+      fixed = fixed.replace(/"([^"]*?)\n([^"]*?)"/g, (match, p1, p2) => `"${p1}\\n${p2}"`);
+      return fixed;
     }
 
-    let data;
-    try {
-      data = JSON.parse(jsonStr);
-    } catch (e) {
-      console.warn("First parse failed, attempting repair...");
-      const repaired = repairJSON(jsonStr);
+    let jsonStr = extractJSONObject(raw);
+    let data = null;
+
+    if (jsonStr) {
       try {
-        data = JSON.parse(repaired);
-      } catch (e2) {
-        console.error("Repair failed. Raw JSON substring:", jsonStr.substring(0, 500));
-        throw new Error(`Invalid JSON from Gemini: ${e.message}`);
+        data = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn("First parse failed, attempting repair...");
+        const repaired = repairJSON(jsonStr);
+        try {
+          data = JSON.parse(repaired);
+        } catch (e2) {
+          console.error("Repair also failed. Falling back to regex extraction.");
+        }
       }
     }
 
-    // Validate stream recommendation
-    const validStreams = ["Science (PCM)", "Science (PCB)", "Commerce", "Arts"];
-    if (!data.streamRecommendation || !validStreams.includes(data.streamRecommendation)) {
-      console.warn("Invalid stream, defaulting to Science (PCM)");
-      data.streamRecommendation = "Science (PCM)";
+    // If still no data, use regex to extract individual fields (but no hard defaults)
+    if (!data) {
+      console.warn("Using regex extraction to build report object.");
+      data = {};
+
+      const streamMatch = raw.match(/"streamRecommendation"\s*:\s*"([^"]+)"/);
+      if (streamMatch && ["Science (PCM)", "Science (PCB)", "Commerce", "Arts"].includes(streamMatch[1])) {
+        data.streamRecommendation = streamMatch[1];
+      } else {
+        throw new Error("Missing or invalid streamRecommendation in Gemini response");
+      }
+
+      const subjectMatch = raw.match(/"subjectCombo"\s*:\s*"([^"]+)"/);
+      if (!subjectMatch) throw new Error("Missing subjectCombo in Gemini response");
+      data.subjectCombo = subjectMatch[1];
+
+      const interestMatch = raw.match(/"interestProfile"\s*:\s*"([^"]+(?:"[^"]*")*)"/);
+      if (!interestMatch) throw new Error("Missing interestProfile in Gemini response");
+      data.interestProfile = interestMatch[1].replace(/\\n/g, "\n");
+
+      const strengthsMatch = raw.match(/"strengthsIdentified"\s*:\s*\[([^\]]+)\]/);
+      if (!strengthsMatch) throw new Error("Missing strengthsIdentified in Gemini response");
+      try {
+        data.strengthsIdentified = JSON.parse(`[${strengthsMatch[1]}]`);
+        if (!Array.isArray(data.strengthsIdentified)) throw new Error();
+      } catch (e) {
+        throw new Error("Invalid strengthsIdentified array in Gemini response");
+      }
+
+      const scoresMatch = raw.match(/"streamScores"\s*:\s*\{([^}]+)\}/);
+      if (!scoresMatch) throw new Error("Missing streamScores in Gemini response");
+      try {
+        const scoresObj = JSON.parse(`{${scoresMatch[1]}}`);
+        if (typeof scoresObj.science !== "number" || typeof scoresObj.commerce !== "number" || typeof scoresObj.arts !== "number") {
+          throw new Error();
+        }
+        data.streamScores = scoresObj;
+      } catch (e) {
+        throw new Error("Invalid streamScores object in Gemini response");
+      }
+
+      const guidanceMatch = raw.match(/"detailedGuidance"\s*:\s*"([^"]+(?:"[^"]*")*)"/);
+      if (!guidanceMatch) throw new Error("Missing detailedGuidance in Gemini response");
+      data.detailedGuidance = guidanceMatch[1].replace(/\\n/g, "\n");
     }
-    // Ensure required fields exist
-    if (!data.subjectCombo) data.subjectCombo = "PCM — Physics, Chemistry, Mathematics";
-    if (!data.interestProfile) data.interestProfile = `${S.name} shows strong analytical skills and curiosity.`;
-    if (!data.strengthsIdentified || !Array.isArray(data.strengthsIdentified)) {
-      data.strengthsIdentified = ["Analytical Thinking", "Problem Solving", "Curiosity", "Persistence", "Goal-Oriented"];
+
+    // Final validation – no defaults, only strict checks
+    const requiredFields = ["streamRecommendation", "subjectCombo", "interestProfile", "strengthsIdentified", "streamScores", "detailedGuidance"];
+    for (const field of requiredFields) {
+      if (!data[field]) throw new Error(`Missing required field: ${field}`);
     }
-    if (!data.streamScores) data.streamScores = { science: 74, commerce: 52, arts: 36 };
-    if (!data.detailedGuidance) data.detailedGuidance = "Based on your profile, Science with PCM is recommended.";
+    if (!["Science (PCM)", "Science (PCB)", "Commerce", "Arts"].includes(data.streamRecommendation)) {
+      throw new Error(`Invalid streamRecommendation: ${data.streamRecommendation}`);
+    }
+    if (!Array.isArray(data.strengthsIdentified) || data.strengthsIdentified.length === 0) {
+      throw new Error("strengthsIdentified must be a non-empty array");
+    }
+    if (typeof data.streamScores !== "object" ||
+        typeof data.streamScores.science !== "number" ||
+        typeof data.streamScores.commerce !== "number" ||
+        typeof data.streamScores.arts !== "number") {
+      throw new Error("streamScores must contain science, commerce, arts numbers");
+    }
 
     S.reportData = data;
     await saveSessionToAdmin(data);
