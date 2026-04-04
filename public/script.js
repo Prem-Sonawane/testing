@@ -4,6 +4,7 @@
  * Modified to use serverless API endpoints for API keys security.
  * FIXED: Career cards and stream recommendation now truly personalised.
  * ADDED: Auto‑Approve toggle in admin dashboard.
+ * ADDED: Retry button for report generation (no fallback defaults).
  */
 "use strict";
 
@@ -42,6 +43,7 @@ const S = {
   scores:{ numerical:0, logical:0, verbal:0, abstract:0, dataInt:0 },
   pool:[], ranked:[],
   reportData:null, charts:{},
+  generatingReport: false, // prevent multiple retries
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -1241,7 +1243,13 @@ async function saveSessionToAdmin(reportData) {
     console.warn("Firestore save failed (non-critical):", err);
   }
 }
+
+/* ═══ GENERATE REPORT WITH RETRY BUTTON ═══════════════════ */
 async function generateReport() {
+  // Prevent multiple simultaneous retries
+  if (S.generatingReport) return;
+  S.generatingReport = true;
+
   document.getElementById("dashLoading").style.display = "flex";
   document.getElementById("dashContent").classList.add("hidden");
 
@@ -1402,15 +1410,37 @@ IMPORTANT: Do not use double quotes (") anywhere inside the string values. Use a
     S.reportData = data;
     await saveSessionToAdmin(data);
     renderDashboard(data);
+    S.generatingReport = false;
   } catch (err) {
     console.error("Report generation failed:", err);
-    document.getElementById("dashLoading").innerHTML = `<p style="color:var(--red);font-size:1rem;text-align:center;font-family:var(--mono)">
-      Report generation failed: ${err.message}<br>Please try again later.
-    </p>`;
-    // No fallback – just show error
+    // Show error message with a retry button
+    document.getElementById("dashLoading").innerHTML = `
+      <div style="text-align:center;">
+        <p style="color:var(--red); font-size:1rem; font-family:var(--mono); margin-bottom:1rem;">
+          Report generation failed: ${err.message}
+        </p>
+        <button id="retryReportBtn" class="btn" style="background:var(--gold); color:#0a0a0a; padding:0.6rem 1.5rem; border-radius:2rem; font-size:0.9rem; cursor:pointer;">
+          ⟳ Try Again
+        </button>
+      </div>
+    `;
+    const retryBtn = document.getElementById("retryReportBtn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => {
+        document.getElementById("dashLoading").innerHTML = `
+          <div class="dl-spinner"></div>
+          <p class="dl-title">Generating your report</p>
+          <p class="dl-sub">Combining conversation insights, aptitude data, and career preferences…</p>
+        `;
+        S.generatingReport = false;
+        generateReport();
+      });
+    }
+    S.generatingReport = false;
     return;
   }
 }
+
 function renderDashboard(data) {
   document.getElementById("dashLoading").style.display = "none";
   const content = document.getElementById("dashContent");
